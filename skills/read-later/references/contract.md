@@ -2,7 +2,7 @@
 
 ## Inbox event — `inbox/<id>.json`
 
-Written by producers (today: the Chrome extension), read only by `scripts/process.py`.
+Written by producers (today: the Chrome extension), read only by `scripts/ingest.py`.
 
 ```json
 {

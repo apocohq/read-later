@@ -49,11 +49,11 @@ The code ships as an **Agent Skill** (`skills/read-later/`), installed onto agen
 ```
 skills/read-later/
   SKILL.md                 when to use it, how to run it, the rules
-  scripts/process.py       inbox → items   (uv run scripts/process.py ~/work/read-later)
+  scripts/ingest.py       inbox → items   (uv run scripts/ingest.py ~/work/read-later)
   references/contract.md   inbox event, item.json, content.md shapes
 ```
 
-What `process.py` does per inbox file, in order:
+What `ingest.py` does per inbox file, in order:
 
 1. **Canonicalize + dedupe** — strip fragment, `www.`, tracking params. Same page twice = one item. `remove` events handled first.
 2. **Extract** — captured HTML → trafilatura → Markdown with title/author/date/word count. Fallback: fetch the URL. Fails visibly if neither yields ≥ 80 words.

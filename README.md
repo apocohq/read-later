@@ -23,5 +23,5 @@ Re-run install to update. Then ask the agent: *"process the read-later inbox"*.
 
 ```sh
 pnpm install && pnpm typecheck && pnpm ext:build        # extension → extension/dist
-uv run skills/read-later/scripts/process.py --help      # skill script
+uv run skills/read-later/scripts/ingest.py --help      # skill script
 ```

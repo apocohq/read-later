@@ -14,14 +14,14 @@ with the readable text as Markdown. Nothing else reads the inbox.
 
 ## Available scripts
 
-- **`scripts/process.py`** — drains `inbox/` into `items/`. `--help` for flags, `--dry-run` to preview, `--json` for machine-readable output.
+- **`scripts/ingest.py`** — drains `inbox/` into `items/`. `--help` for flags, `--dry-run` to preview, `--json` for machine-readable output.
 
 ## Run
 
 From this skill's directory:
 
 ```bash
-uv run scripts/process.py ~/work/read-later
+uv run scripts/ingest.py ~/work/read-later
 ```
 
 - The first run downloads the script's dependencies (declared inline, PEP 723) into uv's cache. Later runs are offline and take a second.

@@ -5,7 +5,7 @@
 """
 Drain the read-later inbox into items.
 
-    uv run scripts/process.py [--dry-run] [--json] STATE_DIR
+    uv run scripts/ingest.py [--dry-run] [--json] STATE_DIR
 
 Layout under STATE_DIR:
     inbox/<id>.json        one event per file, written by the Chrome extension
@@ -185,9 +185,9 @@ def apply_removals(store: Store, events: list[dict]) -> list[dict]:
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     ap = argparse.ArgumentParser(
-        prog="process.py",
+        prog="ingest.py",
         description="Drain the read-later inbox: canonicalize, dedupe, extract each page to Markdown, save under items/.",
-        epilog="Examples:\n  uv run scripts/process.py ~/work/read-later\n  uv run scripts/process.py --dry-run ~/work/read-later\n\n"
+        epilog="Examples:\n  uv run scripts/ingest.py ~/work/read-later\n  uv run scripts/ingest.py --dry-run ~/work/read-later\n\n"
         "Exit codes: 0 ran, 2 bad arguments, 3 STATE_DIR missing or without inbox/.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
