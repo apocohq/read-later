@@ -42,7 +42,7 @@ See [references/contract.md](references/contract.md) for the inbox event, `item.
 
 ## After the run
 
-Report the script's output and stop: how many items were extracted or failed, and what was dropped or merged. Point to failed items by folder. Do not open, read or summarize `content.md` unless the user explicitly asks for a specific article. Summarizing, scoring and choosing what to read is the job of `read-later-evaluate`, a separate skill; if it is not installed, say so instead of doing that work by hand.
+Report the script's output and stop: how many items were extracted or failed, and what was dropped or merged. Point to failed items by folder. Do not open, read or summarize `content.md` unless the user explicitly asks for a specific article. Summarizing, scoring and choosing what to read is the job of `read-later-analyze`, a separate skill; if it is not installed, say so instead of doing that work by hand.
 
 ## Rules
 
@@ -52,4 +52,4 @@ Report the script's output and stop: how many items were extracted or failed, an
 
 ## Related skills
 
-This skill only ingests. Evaluation and ranking (`read-later-evaluate`), Slack capture (`read-later-slack-sweep`) and delivery (`read-later-deliver`) are separate skills that read and write the same `~/work/read-later/` state described in `references/contract.md`.
+This skill only ingests. Analysis (`read-later-analyze`), ranking (`read-later-rank`), Slack capture (`read-later-slack-sweep`) and delivery (`read-later-deliver`) are separate skills that read and write the same `~/work/read-later/` state described in `references/contract.md`.

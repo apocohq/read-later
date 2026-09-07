@@ -42,7 +42,7 @@ Nothing flows back to the browser. The extension keeps its own local list of sav
 
 **Tested:** a bookmark in Chrome lands as a file in `~/work/read-later/inbox/` on the agent.
 
-## Step 2 · Agent turns an inbox file into a clean article  ⏭ next
+## Step 2 · Agent turns an inbox file into a clean article  ✅ works
 
 The code ships as an **Agent Skill** (`skills/read-later-ingest/`), installed onto agents from this repo. No code to copy per agent and no bundled libraries: the script declares its dependencies inline (PEP 723) and `uv run` installs them on first use. uv is in the DAM agent image.
 
@@ -61,20 +61,38 @@ What `ingest.py` does per inbox file, in order:
 
 Tested locally on a real 211 KB capture: 2682 words extracted, duplicate capture merged into one item, remove handled, non-JSON file skipped, rerun is a no-op.
 
-**Test on the agent:**
+**Tested on the agent:** installed via `dam skill source add <repo url>` + `dam skill install <agent> --source <repo url> --name read-later-ingest`; bookmarks in Chrome became items with images, author and date; removes and duplicates accounted for; the agent reports the script output and stops.
 
-1. Push this repo to GitHub, then `dam skill source add <repo url>` and `dam skill install <agent> --source <repo url> --name read-later-ingest`.
-2. Bookmark a page in Chrome.
-3. Ask the agent: *"process the read-later inbox"*. The first run downloads packages (~30 s). Expect one `extracted` line.
-4. Ask it to show `~/work/read-later/items/*/content.md`. It should read like the article.
+## Step 3 · Analyze: TL;DR, category, scores, recommendation  ⏭ next
 
-## Step 3 · Real evaluation  ⏸ later
+Skill `read-later-analyze`. The judgment is subjective to the reader, so it is split in three layers:
 
-A second script in the skill (`evaluate.py`) makes one structured model call per new item and appends the analysis to `item.json`. Then ranking and the queue become meaningful.
+| layer | what | where |
+|---|---|---|
+| rubric | what a TL;DR is, the category list, the 0-5 scales, the output schema | `skills/read-later-analyze/prompts/{tldr,categorize,evaluate}.md`; a copy in `~/work/read-later/prompts/` overrides |
+| context | who the reader is, what they work on, what they know | `~/work/read-later/context.md`, written by the host agent (Guido) from its own memory; template in `references/context-template.md` |
+| judgment | one model run per article | an ephemeral **DAM Invocation** with the model connection only, spawned by `scripts/analyze.mjs` via the platform's `dam-invoke` SDK |
 
-## Step 4 · Daily schedule + reading the queue  ⏸ later
+Why an Invocation: the article never enters the agent's own session, and the evaluator has no Slack, GitHub or mail to act on injected instructions. The platform validates the result against a JSON Schema before it comes back. One pod per article; three run in parallel.
 
-A daily schedule runs the skill. Decide how the queue is read: a Markdown file, an artifact page, or a Slack message.
+```
+node scripts/analyze.mjs --connection ibm-litellm ~/work/read-later
+```
+
+Output lands in `item.json` as `analysis` (tldr, keyClaims, contentType, category, topics, scores, recommendation, whyItMatters, weaknesses, readingMinutes, confidence) and `status` becomes `analyzed`.
+
+Tested locally against a stub SDK: prompt assembly, schema derived from the category list, merge into `item.json`, a failed Invocation recorded and retried on the next run, idempotent rerun.
+
+**Test on the agent (Guido):**
+
+1. `dam skill install guido --source <repo url> --name read-later-ingest` and the same with `--name read-later-analyze`.
+2. Put the three test articles in Guido's inbox (extension pointed at Guido, or `dam file put`).
+3. Ask Guido: *"ingest and analyze read later"*. First time it writes `context.md` from what it knows about you, then runs both scripts. Expect three `analyzed` lines with a recommendation each.
+4. Check `items/*/item.json` → `analysis.tldr` and `whyItMatters` should name your context, not generic praise.
+
+## Step 4 · Rank and deliver  ⏸ later
+
+`read-later-rank`: order analyzed items, cap the buckets (one Read today, four Read next), prune. `read-later-deliver`: render the queue and hand it to the reader. Then a daily schedule runs ingest → analyze → rank → deliver.
 
 ## Not in scope yet
 
