@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>DAM Read Later</title>
+<style>
+  :root{--bg:#f6f5f2;--card:#fff;--ink:#1c1c1a;--muted:#6f6e69;--line:#e2e0d9;--accent:#1c1c1a;--ok:#2f7a3d;--err:#b3261e;--focus:#c9c6bc}
+  @media (prefers-color-scheme:dark){:root{--bg:#161615;--card:#1f1f1d;--ink:#ecebe6;--muted:#9a988f;--line:#33322e;--accent:#ecebe6;--ok:#7dc389;--err:#f28b82;--focus:#4a4842}}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;display:flex;justify-content:center;padding:6vh 1.25rem}
+  main{width:100%;max-width:26rem}
+  header{margin-bottom:1.5rem}
+  h1{margin:0;font-size:1.35rem;font-weight:600;letter-spacing:-.01em}
+  header p{margin:.25rem 0 0;color:var(--muted);font-size:.925rem}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:1.25rem}
+  .field{margin-bottom:1.1rem}
+  .field:last-child{margin-bottom:0}
+  label{display:block;font-size:.8rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.4rem}
+  input,select{width:100%;font:inherit;color:var(--ink);background:transparent;border:1px solid var(--line);border-radius:9px;padding:.6rem .75rem;outline:none;transition:border-color .15s,box-shadow .15s}
+  input:focus,select:focus{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 35%,transparent)}
+  input::placeholder{color:var(--muted);opacity:.7}
+  select{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 18px) 55%,calc(100% - 13px) 55%;background-size:5px 5px;background-repeat:no-repeat;padding-right:2.25rem}
+  .hint{margin:.4rem 0 0;font-size:.8rem;color:var(--muted)}
+  .hint.err{color:var(--err)}
+  .hint a,.linkbtn{color:inherit;text-decoration:underline;text-underline-offset:2px;cursor:pointer;background:none;border:0;padding:0;font:inherit;font-size:inherit}
+  .row{display:flex;gap:.5rem;align-items:center}
+  .row input{flex:1}
+  .agents{position:relative;min-height:2.6rem}
+  .spinner{display:inline-block;width:.8rem;height:.8rem;border:2px solid var(--line);border-top-color:var(--muted);border-radius:50%;animation:spin .8s linear infinite;vertical-align:-.1rem;margin-right:.35rem}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  details{margin-top:1.1rem}
+  summary{cursor:pointer;color:var(--muted);font-size:.85rem;list-style:none;user-select:none}
+  summary::-webkit-details-marker{display:none}
+  summary::before{content:"›";display:inline-block;margin-right:.4rem;transition:transform .15s}
+  details[open] summary::before{transform:rotate(90deg)}
+  details .field{margin-top:.9rem}
+  footer{display:flex;align-items:center;gap:1rem;margin-top:1.25rem}
+  button.primary{font:inherit;font-weight:600;color:var(--bg);background:var(--accent);border:0;border-radius:9px;padding:.6rem 1.1rem;cursor:pointer}
+  button.primary:disabled{opacity:.5;cursor:default}
+  #status{font-size:.875rem;color:var(--muted);min-height:1.25rem}
+  #status.ok{color:var(--ok)}#status.err{color:var(--err)}
+  code{font:.85em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--line) 60%,transparent);padding:.05rem .3rem;border-radius:4px}
+  [hidden]{display:none!important}
+</style></head>
+<body>
+<main>
+  <header>
+    <h1>DAM Read Later</h1>
+    <p>Captures go straight into your agent's workspace on DAM.</p>
+  </header>
+
+  <form id="form" class="card" autocomplete="off">
+    <div class="field">
+      <label for="host">DAM host</label>
+      <input id="host" type="url" placeholder="https://dam.example.com" required>
+    </div>
+
+    <div class="field">
+      <label for="apiKey">API key</label>
+      <input id="apiKey" type="password" placeholder="pk_…" required>
+      <p class="hint">Settings → API keys in DAM. Needs <code>agents:operate</code>, bound to your Read Later agent.</p>
+    </div>
+
+    <div class="field">
+      <label for="agentSelect">Agent</label>
+      <div class="agents">
+        <select id="agentSelect" hidden></select>
+        <input id="agentId" placeholder="agent-…" hidden>
+        <p id="agentHint" class="hint">Enter host and key to list your agents.</p>
+      </div>
+    </div>
+
+    <details id="advanced">
+      <summary>Advanced</summary>
+      <div class="field">
+        <label for="repoDir">Repo folder</label>
+        <input id="repoDir" placeholder="work">
+        <p class="hint">Relative to the agent's home. The DAM Read Later repo is the agent's <code>work</code> directory.</p>
+      </div>
+    </details>
+
+    <footer>
+      <button type="submit" class="primary" id="save">Save</button>
+      <button type="button" class="linkbtn" id="test">Send a test file</button>
+      <span id="status" role="status"></span>
+    </footer>
+  </form>
+</main>
+<script type="module" src="options.js"></script>
+</body></html>
