@@ -1,6 +1,6 @@
 /**
- * Wire contract between the extension and the repo inbox. Mirrors
- * `src/domain/capture.ts`; keep the two in sync.
+ * Wire contract between the extension and the agent inbox. Mirrors
+ * `skills/read-later/references/contract.md`; keep the two in sync.
  */
 export interface BrowserCapture {
   id: string;
@@ -23,11 +23,11 @@ export interface Settings {
   /** DAM API key (pk_…) with agents:operate, bound to the agent. */
   apiKey: string;
   agentId: string;
-  /** Folder the repo lives in, relative to the agent's home directory. The repo is the work dir itself. */
+  /** Folder the repo lives in, relative to the agent's home directory. Scoped under `work/` so one agent can host other tools. */
   repoDir: string;
 }
 
-export const DEFAULT_SETTINGS: Settings = { host: "", apiKey: "", agentId: "", repoDir: "work" };
+export const DEFAULT_SETTINGS: Settings = { host: "", apiKey: "", agentId: "", repoDir: "work/read-later" };
 
 /**
  * Settings live in chrome.storage.local, never sync: the API key must not be

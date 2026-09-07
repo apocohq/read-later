@@ -43,7 +43,7 @@ Deterministic steps in `src/curate/process.ts`:
 
 ## Runtime and cost
 
-One DAM agent on the standard Claude Code image; this repo *is* its `~/work` directory (imported entry by entry, or cloned once a remote exists). Connections: GitHub, Slack, Anthropic. One **daily** schedule runs sweep, process, and deliver in sequence; hourly is possible but costs a model turn per run plus per-item evaluation, and a read-later queue does not need it. Extraction and classification should use a cheap model; the expensive model only evaluates items that survive dedup.
+One DAM agent on the standard Claude Code image; this repo lives at `~/work/read-later` (one `dam import` of the folder, or a clone once a remote exists); the subfolder scopes it so the same agent can host other tools. Connections: GitHub, Slack, Anthropic. One **daily** schedule runs sweep, process, and deliver in sequence; hourly is possible but costs a model turn per run plus per-item evaluation, and a read-later queue does not need it. Extraction and classification should use a cheap model; the expensive model only evaluates items that survive dedup.
 
 No headless browser on the standard image (Chromium needs root-installed libraries). Revisit with a custom image if fetch fails on too many pages.
 

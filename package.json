@@ -1,28 +1,16 @@
 {
   "name": "read-later",
-  "version": "0.0.1",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Agentic reading filter: it reads before you do.",
+  "description": "Read later: a Chrome extension that bookmarks pages into a DAM agent, and the skill that turns them into a reading queue.",
   "scripts": {
-    "typecheck": "tsc --noEmit && tsc -p extension --noEmit",
-    "test": "node --import tsx --test \"src/**/*.test.ts\"",
-    "capture": "tsx src/capture/cli.ts",
-    "process": "tsx src/curate/cli.ts",
-    "queue": "tsx src/consume/cli.ts",
+    "typecheck": "tsc -p extension --noEmit",
     "ext:build": "esbuild extension/src/background.ts extension/src/options.ts --bundle --format=esm --outdir=extension/dist --target=chrome120 && cp extension/manifest.json extension/src/options.html extension/dist/ && rm -rf extension/dist/icons && cp -R extension/icons extension/dist/icons"
   },
-  "dependencies": {
-    "defuddle": "^0.19.3",
-    "jsdom": "^30.0.1",
-    "zod": "^3.23.8"
-  },
   "devDependencies": {
-    "@types/jsdom": "^30.0.0",
-    "@types/node": "^22.7.0",
-    "tsx": "^4.19.0",
-    "typescript": "^5.6.0",
+    "@types/chrome": "^0.0.280",
     "esbuild": "^0.24.0",
-    "@types/chrome": "^0.0.280"
+    "typescript": "^5.6.0"
   }
 }

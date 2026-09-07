@@ -38,7 +38,7 @@ That last point is the limit worth understanding: anyone who can copy your profi
 - Everything the extension writes lands in `inbox/`, which the pipeline treats as untrusted data rather than instructions. A stolen key buys an attacker inbox spam, not influence over the agent.
 - Revoke the key in DAM if the machine is lost. Rotating it costs one paste into this options page.
 
-The strongest remaining hardening is server-side rather than in the extension: a key scoped to `files.upload` under `work/inbox/` only, or short-lived tokens with a rotating refresh token, would shrink the worst case further.
+The strongest remaining hardening is server-side rather than in the extension: a key scoped to `files.upload` under `work/read-later/inbox/` only, or short-lived tokens with a rotating refresh token, would shrink the worst case further.
 
 ## How it talks to DAM
 

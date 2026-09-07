@@ -1,20 +1,27 @@
-# DAM Read Later
+# read-later
 
-It reads before you do. An agentic reading filter that runs as a DAM agent with this repo as its memory.
+Bookmark a page in Chrome, and a DAM agent turns it into a clean article, then into a small ranked reading queue.
 
-- `docs/product-brief.md` — what and why
-- `docs/design.md` — decisions for this version
-- `CLAUDE.md` — the agent's operating manual and repo layout
-- `extension/README.md` — the Chrome/Arc capture extension
+```
+Chrome extension  ──files.upload──▶  ~/work/read-later/inbox/<id>.json  ──skill──▶  ~/work/read-later/items/
+```
 
-## Local development
+- `extension/` — the Chrome extension. Setup in `extension/README.md`.
+- `skills/read-later/` — the agent skill. Install it onto any DAM agent from this repo.
+- `docs/walkthrough.md` — where we are and what is next.
+
+## Install the skill on an agent
 
 ```sh
-pnpm install
-pnpm typecheck
-pnpm test          # node:test via tsx; no test framework dependency
-echo '{"source":"api","url":"https://example.com/post","title":"Example","text":"Some article text."}' | pnpm capture
-pnpm process        # drains inbox/, writes items/, regenerates queue.md / queue.json / queue.html
-pnpm queue          # re-render the queue files only
-pnpm ext:build      # bundle the browser extension into extension/dist/
+dam skill source add https://github.com/<org>/read-later      # once
+dam skill install <agent> --source https://github.com/<org>/read-later --name read-later
+```
+
+Re-run install to update. Then ask the agent: *"process the read-later inbox"*.
+
+## Develop
+
+```sh
+pnpm install && pnpm typecheck && pnpm ext:build        # extension → extension/dist
+uv run skills/read-later/scripts/process.py --help      # skill script
 ```
