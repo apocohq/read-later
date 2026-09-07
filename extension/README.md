@@ -22,7 +22,7 @@ No Slack app, no GitHub token. The only credential is a DAM API key.
 - `Alt+Shift+M`, or *Read later (must read)* from the right-click menu on a page or on the toolbar icon: bypasses filtering.
 - *Remove from Read Later* is also in both right-click menus.
 - Select text first to attach it as a hint about why the page matters.
-- The toolbar icon tells you what happened, in the same grey as the other toolbar icons: a dashed outline marching around the bookmark while uploading, a check inside the bookmark when saved, a solid bookmark with the check cut out for must read, an exclamation mark for a failure (details in the service worker console).
+- The toolbar icon tells you what happened: a grey dashed outline marching around the bookmark while uploading, a green bookmark with a check when saved, a gold solid bookmark with the check cut out for must read, a grey exclamation mark for a failure (details in the service worker console). Idle and error states stay in the same grey as the other toolbar icons, so colour only ever means "this page is in your queue".
 - The extension remembers what it sent (locally, per browser profile) and shows the saved icon again when you return to that page. Tracking parameters and fragments are ignored when matching.
 
 The upload wakes a hibernated agent, so the first capture after a quiet period can take up to two minutes. Later ones are instant.

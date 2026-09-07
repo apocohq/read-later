@@ -37,6 +37,7 @@ from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 import trafilatura
+from lxml import html as lxml_html
 from markdownify import markdownify
 from readability import Document
 
@@ -111,7 +112,7 @@ def extract(html: str, url: str, extracted_by: str) -> dict | None:
     title = (meta.title if meta and meta.title else None) or doc.short_title() or None
     return {
         "title": title,
-        "author": meta.author if meta else None,
+        "author": declared_author(html) or clean_author(meta.author if meta else None),
         "published": meta.date if meta else None,
         "words": words,
         "images": len(re.findall(r"!\[[^\]]*\]\(", md)),
@@ -119,6 +120,42 @@ def extract(html: str, url: str, extracted_by: str) -> dict | None:
         "extractedAt": now(),
         "markdown": md,
     }
+
+
+BAD_AUTHOR = re.compile(r"^(posted|by|author|written|admin|staff)\b|;|\||https?://", re.I)
+USERNAME = re.compile(r"^[a-z0-9._-]+$")  # a CMS login, not a byline
+
+
+def declared_author(html: str) -> str | None:
+    """Author the page states explicitly: meta tags, then JSON-LD. No guessing."""
+    try:
+        tree = lxml_html.fromstring(html)
+    except Exception:  # noqa: BLE001
+        return None
+    for xp in ('//meta[@name="author"]/@content', '//meta[@property="article:author"]/@content', '//meta[@name="parsely-author"]/@content'):
+        for v in tree.xpath(xp):
+            if v := clean_author(v):
+                return v
+    for raw in tree.xpath('//script[@type="application/ld+json"]/text()'):
+        try:
+            data = json.loads(raw)
+        except Exception:  # noqa: BLE001
+            continue
+        nodes = data.get("@graph", [data]) if isinstance(data, dict) else data
+        for node in nodes if isinstance(nodes, list) else []:
+            author = node.get("author") if isinstance(node, dict) else None
+            author = author[0] if isinstance(author, list) and author else author
+            name = author.get("name") if isinstance(author, dict) else author if isinstance(author, str) else None
+            if name := clean_author(name if isinstance(name, str) else None):
+                return name
+    return None
+
+
+def clean_author(value: str | None) -> str | None:
+    value = (value or "").strip()
+    if not value or len(value) > 80 or BAD_AUTHOR.search(value) or USERNAME.match(value):
+        return None
+    return value
 
 
 def fetch(url: str) -> str | None:
@@ -215,6 +252,8 @@ def apply_removals(store: Store, events: list[dict]) -> dict[str, list[dict]]:
         keep = [e for i, e in enumerate(group) if e["action"] == "capture" and i > last_remove]
         for e in group:
             if e not in keep:
+                why = "remove event" if e["action"] == "remove" else "retracted by a later remove"
+                print(f"dropped   {e['_path'].name}  {why}  {canonical}", file=sys.stderr)
                 e["_path"].unlink(missing_ok=True)
         if keep:
             survivors[canonical] = keep
@@ -223,6 +262,7 @@ def apply_removals(store: Store, events: list[dict]) -> dict[str, list[dict]]:
             item["status"] = "archived"
             store.save(folder, item)
             store.feedback({"item": folder, "action": "archive", "reason": f"removed via {group[-1].get('source', '?')}", "at": now()})
+            print(f"archived  items/{folder}", file=sys.stderr)
     return survivors
 
 
@@ -258,6 +298,8 @@ def main(argv: list[str]) -> int:
     for canonical, evs in apply_removals(store, events).items():
         found = store.get(canonical)
         item = found[1] if found else {"url": canonical, "title": first_title(evs), "status": "captured", "mustRead": False, "captures": []}
+        if found or len(evs) > 1:
+            print(f"merged    {len(evs)} capture(s) into {'existing' if found else 'new'} item  {canonical}", file=sys.stderr)
         item["captures"] += [capture_record(e) for e in evs]
         item["mustRead"] = item["mustRead"] or any(e.get("mustRead") for e in evs)
         markdown = None
