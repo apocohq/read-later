@@ -63,37 +63,31 @@ Tested locally on a real 211 KB capture: 2682 words extracted, duplicate capture
 
 **Tested on the agent:** installed via `dam skill source add <repo url>` + `dam skill install <agent> --source <repo url> --name read-later-ingest`; bookmarks in Chrome became items with images, author and date; removes and duplicates accounted for; the agent reports the script output and stops.
 
-## Step 3 · Analyze: TL;DR, category, scores, recommendation  ⏭ next
+## Step 3 · Analyze: TL;DR, category, topics, two scores  ⏭ testing
 
-Skill `read-later-analyze`. The judgment is subjective to the reader, so it is split in three layers:
+Skill `read-later-analyze`. Decided in the grilling of 2026-09-07:
 
-| layer | what | where |
-|---|---|---|
-| rubric | what a TL;DR is, the category list, the 0-5 scales, the output schema | `skills/read-later-analyze/prompts/{tldr,categorize,evaluate}.md`; a copy in `~/work/read-later/prompts/` overrides |
-| context | who the reader is, what they work on, what they know | `~/work/read-later/context.md`, written by the host agent (Guido) from its own memory; template in `references/context-template.md` |
-| judgment | one model run per article | an ephemeral **DAM Invocation** with the model connection only, spawned by `scripts/analyze.mjs` via the platform's `dam-invoke` SDK |
-
-Why an Invocation: the article never enters the agent's own session, and the evaluator has no Slack, GitHub or mail to act on injected instructions. The platform validates the result against a JSON Schema before it comes back. One pod per article; three run in parallel.
+- Analysis describes the **article only**, never the reader, so it runs once and never goes stale. Seven fields: `tldr` (2-4 sentences stating the claim), `keyClaims` (1-3), `contentType`, `category` (one shelf from a hand-edited list), `topics` (2-5 labels from a shared vocabulary, new ones coined only when the main subject has no match), `hardWon` and `grounded` (0-10 with a one-sentence reason, anchors at 0/5/10).
+- The reader's interests live in **`~/work/read-later/topics.md`** as weights on topics, not in a context file. Categories and topics are orthogonal: shelf vs labels.
+- The judgment runs in an **ephemeral DAM Invocation** per article with the model connection only, spawned by `scripts/analyze.mjs` through the platform's `dam-invoke` SDK; the platform validates the result against a JSON Schema derived from the category list. Article text never enters the agent's session, and the evaluator has nothing to exfiltrate to.
+- Rubric in `prompts/{tldr,categorize,score}.md`; a copy in `~/work/read-later/prompts/` overrides.
 
 ```
 node scripts/analyze.mjs --connection ibm-litellm ~/work/read-later
 ```
 
-Output lands in `item.json` as `analysis` (tldr, keyClaims, contentType, category, topics, scores, recommendation, whyItMatters, weaknesses, readingMinutes, confidence) and `status` becomes `analyzed`.
+## Step 4 · Rank: tonight's queue  ⏭ testing
 
-Tested locally against a stub SDK: prompt assembly, schema derived from the category list, merge into `item.json`, a failed Invocation recorded and retried on the next run, idempotent rerun.
+Skill `read-later-rank`, `scripts/rank.py`, standard library only, no model. Per item: relevance = mean of the two highest topic weights among its topics; quality = mean of hard-won and grounded; priority = half of each, −1 for over 4000 words, +3 for must-read. Excludes archived, unanalyzed, not-an-article, and news older than 14 days. Top item = Read today, next four = Read next, rest = Later. Writes `queue.md` and `queue.json`. Changing a weight in `topics.md` and rerunning is the feedback loop.
 
-**Test on the agent (Guido):**
+Tested locally on the three test articles with a stub SDK: ingest → analyze (one injected failure, retried next run, coined topics appended to `topics.md`) → rank; raising `code-review` to 10 lifted the Fowler piece from third to second (its quality scores still keep it below the Uber piece).
 
-1. `dam skill install guido --source <repo url> --name read-later-ingest` and the same with `--name read-later-analyze`.
-2. Put the three test articles in Guido's inbox (extension pointed at Guido, or `dam file put`).
-3. Ask Guido: *"ingest and analyze read later"*. First time it writes `context.md` from what it knows about you, then runs both scripts. Expect three `analyzed` lines with a recommendation each.
-4. Check `items/*/item.json` → `analysis.tldr` and `whyItMatters` should name your context, not generic praise.
+**Test on first-reader:** skills installed, `ibm-litellm` granted, the three articles in the inbox; a temporary schedule triggers *"ingest, analyze and rank read later"*; verify via session transcript, `item.json` and `queue.md`.
 
-## Step 4 · Rank and deliver  ⏸ later
+## Step 5 · Deliver + daily schedule  ⏸ later
 
-`read-later-rank`: order analyzed items, cap the buckets (one Read today, four Read next), prune. `read-later-deliver`: render the queue and hand it to the reader. Then a daily schedule runs ingest → analyze → rank → deliver.
+`read-later-deliver`: hand the queue to the reader (Slack message, artifact page). Then one daily schedule runs ingest → analyze → rank → deliver.
 
 ## Not in scope yet
 
-Slack sweep, feedback loop, multi-user template, name change.
+Slack sweep, feedback from reading (mark read, useful/not), multi-user template, name change.

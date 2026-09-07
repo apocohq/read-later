@@ -36,7 +36,7 @@ Files that are not valid JSON or lack `url`/`capturedAt` are skipped with a mess
 
 ## Item — `items/<folder>/item.json`
 
-The folder is `<first capture time>-<title slug>`, e.g. `2026-09-07T13-00-00Z-running-a-software-factory-efficiently-at-uber-scale`. Folders sort by capture time and read like a list of what you saved. Dedup does not depend on the name: `index.json` maps canonical URL → folder.
+The folder is `<first capture time>-<title slug>`, e.g. `2026-09-07T13-00-00Z-running-a-software-factory-efficiently-at-uber-scale`. Folders sort by capture time and read like a list of what you saved. Dedup is by the canonical `url` inside `item.json`; there is no index file.
 
 ```json
 {
@@ -69,13 +69,35 @@ The folder is `<first capture time>-<title slug>`, e.g. `2026-09-07T13-00-00Z-ru
 | `extractedBy` | `capture` (browser HTML), `fetch` (agent fetched the URL), `capture-text` (producer's text) |
 | `extractedAt` | when |
 
-Later skills add their own top-level keys (e.g. `analysis`).
+`read-later-analyze` adds `analysis` and sets `status: "analyzed"`:
+
+```json
+"analysis": {
+  "version": "2", "at": "…", "template": "claude-code", "connection": "ibm-litellm",
+  "tldr": "2-4 sentences stating the claim",
+  "keyClaims": ["…", "…"],
+  "contentType": "article",
+  "category": "ai-and-agents",
+  "topics": ["agent-cost", "mcp", "subagents"],
+  "hardWon":  { "score": 9, "reason": "one sentence" },
+  "grounded": { "score": 8, "reason": "one sentence" }
+}
+```
+
+A failed analysis leaves `status` unchanged and adds `analysisError: {at, message}`; the next run retries it.
 
 ## Article — `items/<folder>/content.md`
 
 Short frontmatter (`title`, `url`, `author`, `published`, when known), a blank line, then Markdown with headings, links, tables and images (absolute URLs). The full metadata lives in `item.json`.
 
-## Index and log
+## Vocabulary — `topics.md`
 
-- `index.json`: canonical URL → item folder.
-- `feedback.jsonl`: append-only, one JSON object per line, e.g. `{"item": "<folder>", "action": "archive", "reason": "removed via browser", "at": "…"}`.
+Two flat lists, seeded by `read-later-analyze` from its `references/topics.md`. `# Categories`: the shelves, one per item, hand-edited; also the analyzer's allowed values. `# Topics`: labels, `- label` or `- label: N` where N (0-10) is how much the reader cares now; unweighted counts as 5. The analyzer appends coined labels; `read-later-rank` reads the weights.
+
+## Queue — `queue.md`, `queue.json`
+
+Written by `read-later-rank`. Buckets `read_today`, `read_next`, `later`; each entry carries `item`, `title`, `url`, `priority`, `relevance`, `quality`, `minutes`, `tldr`, `category`, `topics`, `notes`. Generated files: change the weights or the script, not these.
+
+## Log — `feedback.jsonl`
+
+Append-only, one JSON object per line, e.g. `{"item": "<folder>", "action": "archive", "reason": "removed via browser", "at": "…"}`.

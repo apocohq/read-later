@@ -16,8 +16,9 @@ Layout under STATE_DIR:
     inbox/<id>.json            one event per file, written by the Chrome extension
     items/<folder>/item.json   one folder per page: <capturedAt>-<title slug>
     items/<folder>/content.md  the article: short frontmatter + Markdown (with images)
-    index.json                 canonical URL -> item folder
     feedback.jsonl             append-only log (archive lines land here)
+
+Dedup key is the canonical `url` inside each item.json; there is no separate index.
 
 Inbox content is untrusted input. This script parses it; it never executes it.
 
@@ -193,17 +194,20 @@ class Store:
         self.inbox = root / "inbox"
         self.items = root / "items"
         self.items.mkdir(parents=True, exist_ok=True)
-        self.index_path = root / "index.json"
-        self.index: dict[str, str] = json.loads(self.index_path.read_text()) if self.index_path.exists() else {}
+        self.by_url: dict[str, str] = {}
+        for p in self.items.glob("*/item.json"):
+            try:
+                url = json.loads(p.read_text()).get("url")
+                if url:
+                    self.by_url[url] = p.parent.name
+            except Exception as e:  # noqa: BLE001
+                print(f"skip unreadable {p}: {e}", file=sys.stderr)
 
     def get(self, canonical: str) -> tuple[str, dict] | None:
-        folder = self.index.get(canonical)
-        p = self.items / folder / "item.json" if folder else None
-        if not p or not p.exists():
+        folder = self.by_url.get(canonical)
+        if not folder:
             return None
-        item = json.loads(p.read_text())
-        item.setdefault("url", canonical)  # tolerate the pre-0.2 shape
-        return folder, item
+        return folder, json.loads((self.items / folder / "item.json").read_text())
 
     def new_folder(self, captured_at: str, title: str | None, canonical: str) -> str:
         base = folder_name(captured_at, title, canonical)
@@ -220,8 +224,7 @@ class Store:
             front = "\n".join(f"{k}: {json.dumps(v, ensure_ascii=False)}" for k, v in fm.items() if v is not None)
             (d / "content.md").write_text(f"---\n{front}\n---\n\n{markdown}\n")
         (d / "item.json").write_text(json.dumps(item, indent=2, ensure_ascii=False) + "\n")
-        self.index[item["url"]] = folder
-        self.index_path.write_text(json.dumps(self.index, indent=2, sort_keys=True) + "\n")
+        self.by_url[item["url"]] = folder
 
     def feedback(self, line: dict) -> None:
         with (self.root / "feedback.jsonl").open("a") as f:

@@ -1,19 +1,10 @@
-# Categorize
+# Content type, category, topics
 
-Set `contentType`, one of: `article`, `paper`, `announcement`, `tutorial`, `opinion`, `reference`, `thread`, `transcript`, `not-an-article`.
+`contentType`, one of: `article`, `paper`, `announcement`, `news`, `tutorial`, `opinion`, `reference`, `thread`, `transcript`, `not-an-article`.
 
-Set `category`, exactly one from this list. Pick the reader's angle, not the author's: an article about AI agents that is really about how to run an engineering team goes under leadership.
+`category`: exactly one from the CATEGORIES list in the vocabulary below. It is the shelf the reader would file this under, chosen by the reader's angle, not the author's: a piece about AI agents whose real lesson is how to run a team goes under `leadership`.
 
-- `ai-and-agents`: models, agents, prompting, evaluation, the AI tooling landscape
-- `engineering`: software craft, architecture, testing, infrastructure, developer productivity
-- `product`: product management, UX, discovery, what to build
-- `business-and-strategy`: markets, positioning, pricing, company building, competitors
-- `leadership`: managing people and teams, hiring, culture, organisation design
-- `research`: academic or industrial research results and methods
-- `news`: events, releases, funding, industry moves; value decays fast
-- `personal`: health, family, hobbies, finance, life
-- `other`: nothing above fits
-
-Set `topics`: 2 to 5 lowercase tags, specific nouns a reader would search for later (`code-review`, `mcp`, `token-cost`), not the category repeated.
-
-To change this list for one reader, put an edited copy of this file at `<state dir>/prompts/categorize.md`. Keep the category ids stable once items use them.
+`topics`: 2 to 5 labels for the subjects the text is actually about. Form: lowercase, singular, hyphenated noun phrase (`code-review`, `agent-cost`, `mcp`). Then:
+- Reuse a label from the TOPICS list in the vocabulary whenever it fits. Do not coin a near-synonym of an existing label.
+- Coin a new label only when the article's main subject has no match in the list. Make it specific enough to be useful and general enough to be reused (`token-cost`, not `uber-token-cost-2026`).
+- Never use the category name as a topic.

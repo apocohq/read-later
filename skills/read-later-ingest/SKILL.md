@@ -52,4 +52,4 @@ Report the script's output and stop: how many items were extracted or failed, an
 
 ## Related skills
 
-This skill only ingests. Analysis (`read-later-analyze`), ranking (`read-later-rank`), Slack capture (`read-later-slack-sweep`) and delivery (`read-later-deliver`) are separate skills that read and write the same `~/work/read-later/` state described in `references/contract.md`.
+This skill only ingests. `read-later-analyze` (TL;DR, category, topics, scores) and `read-later-rank` (tonight's queue) are separate skills that read and write the same `~/work/read-later/` state described in `references/contract.md`.
