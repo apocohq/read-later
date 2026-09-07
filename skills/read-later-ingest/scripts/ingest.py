@@ -15,7 +15,7 @@ Drain the read-later inbox into items.
 Layout under STATE_DIR:
     inbox/<id>.json            one event per file, written by the Chrome extension
     items/<folder>/item.json   one folder per page: <capturedAt>-<title slug>
-    items/<folder>/content.md  the article, frontmatter + Markdown (with images)
+    items/<folder>/content.md  the article: short frontmatter + Markdown (with images)
     index.json                 canonical URL -> item folder
     feedback.jsonl             append-only log (archive lines land here)
 
@@ -175,14 +175,13 @@ class Store:
             folder, n = f"{base}-{n}", n + 1
         return folder
 
-    def save(self, folder: str, item: dict, content: dict | None = None) -> None:
+    def save(self, folder: str, item: dict, markdown: str | None = None) -> None:
         d = self.items / folder
         d.mkdir(parents=True, exist_ok=True)
-        if content:
-            fm = {"title": content["title"], "url": item["url"], "author": content.get("author"), "published": content.get("published"),
-                  "words": content["words"], "images": content["images"], "extractedBy": content["extractedBy"], "extractedAt": content["extractedAt"]}
+        if markdown is not None:
+            fm = {k: item.get(k) for k in ("title", "url", "author", "published")}
             front = "\n".join(f"{k}: {json.dumps(v, ensure_ascii=False)}" for k, v in fm.items() if v is not None)
-            (d / "content.md").write_text(f"---\n{front}\n---\n\n{content['markdown']}\n")
+            (d / "content.md").write_text(f"---\n{front}\n---\n\n{markdown}\n")
         (d / "item.json").write_text(json.dumps(item, indent=2, ensure_ascii=False) + "\n")
         self.index[item["url"]] = folder
         self.index_path.write_text(json.dumps(self.index, indent=2, sort_keys=True) + "\n")
@@ -190,6 +189,10 @@ class Store:
     def feedback(self, line: dict) -> None:
         with (self.root / "feedback.jsonl").open("a") as f:
             f.write(json.dumps(line) + "\n")
+
+
+def first_title(evs: list[dict]) -> str | None:
+    return next((e["title"] for e in evs if e.get("title")), None)
 
 
 def capture_record(ev: dict) -> dict:
@@ -254,25 +257,22 @@ def main(argv: list[str]) -> int:
     ok = failed = 0
     for canonical, evs in apply_removals(store, events).items():
         found = store.get(canonical)
-        if found:
-            folder, item = found
-        else:
-            first = evs[0]
-            folder = store.new_folder(first["capturedAt"], first.get("title"), canonical)
-            item = {"url": canonical, "title": first.get("title"), "status": "captured", "mustRead": False, "captures": []}
+        item = found[1] if found else {"url": canonical, "title": first_title(evs), "status": "captured", "mustRead": False, "captures": []}
         item["captures"] += [capture_record(e) for e in evs]
         item["mustRead"] = item["mustRead"] or any(e.get("mustRead") for e in evs)
-        content = None
-        if not (store.items / folder / "content.md").exists():
-            content = acquire(canonical, evs)
-            if content:
-                item.update(status="extracted", title=content["title"] or item.get("title"))
+        markdown = None
+        if not found or not (store.items / found[0] / "content.md").exists():
+            if content := acquire(canonical, evs):
+                markdown = content.pop("markdown")
+                item.update({k: v for k, v in content.items() if v is not None}, status="extracted")
+                item["title"] = item.get("title") or first_title(evs)
                 item.pop("failure", None)
                 ok += 1
             else:
                 item.update(status="failed", failure=f"no source yielded at least {MIN_WORDS} words")
                 failed += 1
-        store.save(folder, item, content)
+        folder = found[0] if found else store.new_folder(evs[0]["capturedAt"], item.get("title"), canonical)
+        store.save(folder, item, markdown)
         for e in evs:
             e["_path"].unlink(missing_ok=True)
         if args.json:

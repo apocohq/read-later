@@ -47,7 +47,13 @@ The folder is `<first capture time>-<title slug>`, e.g. `2026-09-07T13-00-00Z-ru
   "captures": [
     { "at": "2026-09-07T13:00:00.000Z", "source": "browser", "selectedText": "70% of pull requests" },
     { "at": "2026-09-07T13:03:00.000Z", "source": "browser", "note": "second time" }
-  ]
+  ],
+  "author": "…",
+  "published": "2026-09-02",
+  "words": 3465,
+  "images": 8,
+  "extractedBy": "capture",
+  "extractedAt": "2026-09-07T13:37:31.336Z"
 }
 ```
 
@@ -58,25 +64,16 @@ The folder is `<first capture time>-<title slug>`, e.g. `2026-09-07T13-00-00Z-ru
 | `status` | `captured` → `extracted` \| `failed` (adds `failure`) → `archived` |
 | `mustRead` | true once any capture said so; never reset |
 | `captures[]` | one per capture: `at`, `source`, and only the user's signals if present: `note`, `selectedText`, `recommendedBy`, `sourceRef` |
+| `author`, `published` | when found. `published` is heuristic; treat as approximate |
+| `words`, `images` | size of the extracted article |
+| `extractedBy` | `capture` (browser HTML), `fetch` (agent fetched the URL), `capture-text` (producer's text) |
+| `extractedAt` | when |
 
-Later skills add their own top-level keys (e.g. `analysis`). Extraction metadata is not repeated here; it lives in `content.md`.
+Later skills add their own top-level keys (e.g. `analysis`).
 
 ## Article — `items/<folder>/content.md`
 
-Frontmatter, a blank line, then Markdown with headings, links, tables and images (absolute URLs).
-
-```
----
-title: "Running a Software Factory Efficiently at Uber Scale"
-url: "https://uber.com/us/en/blog/efficient-software-factory"
-author: "…"            # when found
-published: "2026-09-02" # when found; heuristic, treat as approximate
-words: 3465
-images: 8
-extractedBy: "capture"  # capture | fetch | capture-text
-extractedAt: "2026-09-07T13:37:31.336Z"
----
-```
+Short frontmatter (`title`, `url`, `author`, `published`, when known), a blank line, then Markdown with headings, links, tables and images (absolute URLs). The full metadata lives in `item.json`.
 
 ## Index and log
 
