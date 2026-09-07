@@ -1,34 +1,34 @@
 # Design decisions (v0)
 
-Status: skeleton. Complements `product-brief.md`; where they differ, this file wins. Informed by the 2026-09-04 read-later brainstorm (`strategy/meetings/2026-09-04-read-later-agent-brainstorm.md`).
+Status: direction for the first versions. Complements `product-brief.md`; where they differ, this file wins. Current progress and the step-by-step plan live in `walkthrough.md`.
 
 ## Three stages
 
-| Stage | Question it answers | Code | Output |
+| Stage | Question it answers | Where | Output |
 |---|---|---|---|
-| **Capture** | How does material get to the agent? | `src/capture/`, `extension/`, `.claude/skills/sweep-slack/` | `inbox/<id>.json` |
-| **Curate** | What is it, is it worth reading, and how does it rank? | `src/curate/` | `items/<id>/` (item.json, content.md, analysis.*.json), `queue.json` |
-| **Consume** | How is the result presented and acted on? | `src/consume/` | `queue.md` (Slack), `queue.html` (artifact) |
+| **Capture** | How does material get to the agent? | `extension/` today; a Slack sweep later | `inbox/<id>.json` |
+| **Curate** | What is it, is it worth reading, and how does it rank? | `skills/read-later/scripts/` (`ingest.py` today; `evaluate.py`, `rank.py` planned) | `items/<id>/` (item.json, content.md), `queue.json` |
+| **Consume** | How is the result presented and acted on? | planned | `queue.md`, `queue.html` |
 
-Each stage reads and writes only files in this repo, through `src/store/`. Stages can be run and tested independently.
+Code ships as an Agent Skill installed from this repo. State lives on the agent under `~/work/read-later/`. Each stage reads and writes only files there, so stages can be run and tested independently.
 
 ## Capture
 
-Two paths for the first version, both landing in `inbox/`:
+Two paths, both landing in `inbox/`. The extension is built; the Slack sweep is planned.
 
-- **Slack sweep.** On a schedule the agent reads recent history through the Slack MCP connection (acting as the principal) and writes one capture per link or document. Swept conversations include the principal's **own DM (messages to self)**, so sharing a link to yourself from any device is a capture. No ambient mode, no per-message turns.
+- **Slack sweep (planned).** On a schedule the agent reads recent history through the Slack MCP connection (acting as the principal) and writes one capture per link or document. Swept conversations include the principal's **own DM (messages to self)**, so sharing a link to yourself from any device is a capture. No ambient mode, no per-message turns.
 - **Browser extension.** Chrome/Arc, one click. Ships URL, title, selection, and the **full rendered HTML** of the page, so authenticated and JavaScript-rendered pages work without the agent fetching anything. Transport: a DAM API key (`agents:operate`, bound to the agent) and the api-server's `files.upload` procedure, which drops the capture as `inbox/<id>.json` in the agent workspace. Chosen because Slack Enterprise blocks user-token apps and this needs no third-party service at all. The upload wakes a hibernated agent; a later DAM inbound-webhook feature could avoid that. See `extension/README.md`.
 
 LinkedIn is out of scope for now.
 
 ## Curate
 
-Deterministic steps in `src/curate/process.ts`:
+Deterministic steps, today in `ingest.py` (1 to 3), the rest planned:
 
 1. apply retractions: a `remove` event is a retraction, not a delete. Per canonical URL the last event in the batch decides, ordered by `capturedAt` — a remove drops the captures before it (they are never fetched or evaluated) and archives the item if it was already processed; a capture after it survives and nothing is archived. The extension cannot delete from the workspace itself: its key is upload-only, and once processed there is no inbox file to delete, only an item to archive;
 2. canonicalize URL, dedup against `index.json` (one item per canonical URL, captures appended);
-3. acquire content, first source that succeeds: reader-view extraction (Defuddle) of the HTML the browser captured; server-side fetch + the same extraction; capturer-supplied plain text;
-4. assemble context from providers (`profile.md` now; later the digital-traces agent's output file);
+3. acquire content, first source that succeeds: reader-view extraction (trafilatura) of the HTML the browser captured; server-side fetch + the same extraction; capturer-supplied plain text;
+4. assemble context (`profile.md`; later other context files the agent maintains);
 5. evaluate through a structured model call (`Evaluator`); article text is data, not prompt;
 6. prune: archive filtered-out items immediately and unread items after 14 days, never must-reads;
 7. rank with weighted 0-5 dimensions, penalty terms weighted so they cannot swamp the base, must-read as a hard boost; caps of one Read today and four Read next.
@@ -43,15 +43,11 @@ Deterministic steps in `src/curate/process.ts`:
 
 ## Runtime and cost
 
-One DAM agent on the standard Claude Code image; this repo lives at `~/work/read-later` (one `dam import` of the folder, or a clone once a remote exists); the subfolder scopes it so the same agent can host other tools. Connections: GitHub, Slack, Anthropic. One **daily** schedule runs sweep, process, and deliver in sequence; hourly is possible but costs a model turn per run plus per-item evaluation, and a read-later queue does not need it. Extraction and classification should use a cheap model; the expensive model only evaluates items that survive dedup.
+One DAM agent on the standard Claude Code image, with the skill installed from this repo and state under `~/work/read-later` (the subfolder scopes it so the same agent can host other tools). Connections: a model provider for evaluation; Slack once the sweep exists. One **daily** schedule runs sweep, process, and deliver in sequence; hourly is possible but costs a model turn per run plus per-item evaluation, and a read-later queue does not need it. Extraction and classification should use a cheap model; the expensive model only evaluates items that survive dedup.
 
 No headless browser on the standard image (Chromium needs root-installed libraries). Revisit with a custom image if fetch fails on too many pages.
 
-Open: whether unattended turns may fetch arbitrary hosts through the egress gateway. Until verified, extension text must be sufficient on its own.
-
-## Slack sweep configuration
-
-Conversations to sweep: _to be listed here_. Always include the principal's self-DM.
+Unattended runs reach the network through the egress gateway; the `all` preset allows the fetch fallback and the first-run package download.
 
 ## Not yet
 
