@@ -18,7 +18,8 @@
  *   --concurrency <n>       parallel Invocations (default 3)
  *   --ttl-minutes <n>       per-Invocation deadline (default 10)
  *   --max-words <n>         truncate the article beyond this (default 8000)
- *   --force                 re-analyze items that already have an analysis
+ *   --force                 re-analyze items that already have a current analysis
+ *                           (an analysis from an older prompt version is always redone)
  *   --dry-run               list the items and print the first assembled prompt; spawn nothing
  *   --json                  one JSON object per item on stdout
  *   --sdk <path>            driver SDK module (default /usr/local/lib/driver-sdk.mjs)
@@ -132,7 +133,7 @@ function listItems(stateDir, force) {
     .map((d) => ({ folder: d.name, dir: join(itemsDir, d.name) }))
     .filter(({ dir }) => existsSync(join(dir, "item.json")) && existsSync(join(dir, "content.md")))
     .map((it) => ({ ...it, item: readJson(join(it.dir, "item.json")) }))
-    .filter(({ item }) => item.status !== "archived" && (force || !item.analysis))
+    .filter(({ item }) => item.status !== "archived" && (force || !item.analysis || item.analysis.version !== ANALYSIS_VERSION))
     .sort((a, b) => a.folder.localeCompare(b.folder));
 }
 
@@ -180,7 +181,9 @@ async function main() {
   const schema = schemaFor(vocab);
   const items = listItems(stateDir, opts.force);
   log(`prompts: ${PROMPTS.map((n) => `${n} (${prompts[n].source})`).join(", ")}; vocabulary: ${vocab.categories.length} categories, ${vocab.topics.length} topics`);
-  if (!items.length) { log("nothing to analyze: no extracted items without an analysis"); return; }
+  if (!items.length) { log(`nothing to analyze: no extracted items without a v${ANALYSIS_VERSION} analysis`); return; }
+  const outdated = items.filter((it) => it.item.analysis).length;
+  if (outdated) log(`${outdated} item(s) carry an analysis from an older version and will be redone`);
 
   if (opts.dryRun) {
     for (const it of items) console.log(JSON.stringify({ item: `items/${it.folder}`, title: it.item.title, words: it.item.words }));
