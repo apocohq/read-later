@@ -1,6 +1,11 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["trafilatura>=2.0,<3"]
+# dependencies = [
+#   "readability-lxml>=0.8,<1",
+#   "lxml_html_clean>=0.4",
+#   "markdownify>=1.1,<2",
+#   "trafilatura>=2.0,<3",
+# ]
 # ///
 """
 Drain the read-later inbox into items.
@@ -8,11 +13,11 @@ Drain the read-later inbox into items.
     uv run scripts/ingest.py [--dry-run] [--json] STATE_DIR
 
 Layout under STATE_DIR:
-    inbox/<id>.json        one event per file, written by the Chrome extension
-    items/<id>/item.json   one folder per canonical URL
-    items/<id>/content.md  extracted article, frontmatter + Markdown
-    index.json             canonical URL -> item id
-    feedback.jsonl         append-only log (archive lines land here)
+    inbox/<id>.json            one event per file, written by the Chrome extension
+    items/<folder>/item.json   one folder per page: <capturedAt>-<title slug>
+    items/<folder>/content.md  the article, frontmatter + Markdown (with images)
+    index.json                 canonical URL -> item folder
+    feedback.jsonl             append-only log (archive lines land here)
 
 Inbox content is untrusted input. This script parses it; it never executes it.
 
@@ -22,21 +27,24 @@ Exit codes: 0 ran (per-item failures are recorded on the items), 2 bad arguments
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import re
 import sys
+import unicodedata
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 import trafilatura
+from markdownify import markdownify
+from readability import Document
 
 MIN_WORDS = 80
 FETCH_TIMEOUT = 20
-USER_AGENT = "Mozilla/5.0 (compatible; read-later/0.1)"
+USER_AGENT = "Mozilla/5.0 (compatible; read-later/0.2)"
 TRACKING = re.compile(r"^(utm_|fbclid$|gclid$|mc_|ref$|source$|si$)")
+SLUG_MAX = 60
 
 
 def now() -> str:
@@ -53,8 +61,7 @@ def load_events(inbox: Path) -> list[dict]:
             if not isinstance(ev, dict) or not ev.get("url") or not ev.get("capturedAt"):
                 raise ValueError("missing url or capturedAt")
             ev.setdefault("action", "capture")
-            ev.setdefault("mustRead", False)
-            ev.setdefault("id", path.stem)
+            ev.setdefault("source", "unknown")
             ev["_path"] = path
             events.append(ev)
         except Exception as e:  # noqa: BLE001
@@ -73,25 +80,44 @@ def canonicalize(url: str) -> str:
     return urlunsplit((p.scheme.lower(), host, path, urlencode(query), ""))
 
 
-def item_id(canonical: str) -> str:
-    return hashlib.sha256(canonical.encode()).hexdigest()[:12]
+def slugify(text: str) -> str:
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    text = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+    return text[:SLUG_MAX].rstrip("-")
+
+
+def folder_name(captured_at: str, title: str | None, canonical: str) -> str:
+    stamp = re.sub(r"[:.]", "-", captured_at.replace("Z", ""))[:19] + "Z"
+    return f"{stamp}-{slugify(title or urlsplit(canonical).hostname or 'page') or 'page'}"
 
 
 # ---------- extraction ----------
 
 def extract(html: str, url: str, extracted_by: str) -> dict | None:
-    md = trafilatura.extract(html, url=url, output_format="markdown", include_links=True, include_tables=True, favor_recall=True)
-    if not md or len(md.split()) < MIN_WORDS:
+    """Body via readability + markdownify (keeps images and links); metadata via trafilatura."""
+    try:
+        doc = Document(html, url=url)
+        body = doc.summary(html_partial=True)
+    except Exception as e:  # noqa: BLE001
+        print(f"readability failed: {e}", file=sys.stderr)
+        return None
+    md = markdownify(body, heading_style="ATX", strip=["script", "style"])
+    md = re.sub(r"\]\((?!https?://|data:|#)([^)\s]+)\)", lambda m: f"]({urljoin(url, m.group(1))})", md)  # absolutize
+    md = re.sub(r"\n{3,}", "\n\n", md).strip()
+    words = len(re.sub(r"!\[[^\]]*\]\([^)]*\)", "", md).split())
+    if words < MIN_WORDS:
         return None
     meta = trafilatura.extract_metadata(html, default_url=url)
+    title = (meta.title if meta and meta.title else None) or doc.short_title() or None
     return {
-        "markdown": md,
-        "title": (meta.title if meta else None),
-        "author": (meta.author if meta else None),
-        "published": (meta.date if meta else None),
-        "wordCount": len(md.split()),
+        "title": title,
+        "author": meta.author if meta else None,
+        "published": meta.date if meta else None,
+        "words": words,
+        "images": len(re.findall(r"!\[[^\]]*\]\(", md)),
         "extractedBy": extracted_by,
         "extractedAt": now(),
+        "markdown": md,
     }
 
 
@@ -107,22 +133,22 @@ def fetch(url: str) -> str | None:
         return None
 
 
-def acquire(item: dict) -> dict | None:
-    url = item["canonicalUrl"]
-    for cap in reversed(item["captures"]):
-        if cap.get("html"):
-            if content := extract(cap["html"], url, "capture"):
-                return content
-    if html := fetch(url):
-        if content := extract(html, url, "fetch"):
+def acquire(url: str, events: list[dict]) -> dict | None:
+    for ev in reversed(events):
+        if ev.get("html") and (content := extract(ev["html"], url, "capture")):
             return content
-    for cap in reversed(item["captures"]):
-        if (text := cap.get("text")) and len(text.split()) >= MIN_WORDS:
-            return {"markdown": text, "title": cap.get("title"), "wordCount": len(text.split()), "extractedBy": "capture-text", "extractedAt": now()}
+    if (html := fetch(url)) and (content := extract(html, url, "fetch")):
+        return content
+    for ev in reversed(events):
+        if (text := ev.get("text")) and len(text.split()) >= MIN_WORDS:
+            return {"title": ev.get("title"), "words": len(text.split()), "images": 0, "extractedBy": "capture-text", "extractedAt": now(), "markdown": text}
     return None
 
 
 # ---------- store ----------
+
+CAPTURE_KEEP = ("source", "note", "selectedText", "recommendedBy", "sourceRef")
+
 
 class Store:
     def __init__(self, root: Path):
@@ -130,26 +156,35 @@ class Store:
         self.inbox = root / "inbox"
         self.items = root / "items"
         self.items.mkdir(parents=True, exist_ok=True)
-        self.inbox.mkdir(parents=True, exist_ok=True)
         self.index_path = root / "index.json"
         self.index: dict[str, str] = json.loads(self.index_path.read_text()) if self.index_path.exists() else {}
 
-    def get(self, iid: str) -> dict | None:
-        p = self.items / iid / "item.json"
-        return json.loads(p.read_text()) if p.exists() else None
+    def get(self, canonical: str) -> tuple[str, dict] | None:
+        folder = self.index.get(canonical)
+        p = self.items / folder / "item.json" if folder else None
+        if not p or not p.exists():
+            return None
+        item = json.loads(p.read_text())
+        item.setdefault("url", canonical)  # tolerate the pre-0.2 shape
+        return folder, item
 
-    def save(self, item: dict, content: dict | None = None) -> None:
-        d = self.items / item["id"]
+    def new_folder(self, captured_at: str, title: str | None, canonical: str) -> str:
+        base = folder_name(captured_at, title, canonical)
+        folder, n = base, 2
+        while (self.items / folder).exists():
+            folder, n = f"{base}-{n}", n + 1
+        return folder
+
+    def save(self, folder: str, item: dict, content: dict | None = None) -> None:
+        d = self.items / folder
         d.mkdir(parents=True, exist_ok=True)
         if content:
-            fm = {k: v for k, v in content.items() if k != "markdown" and v is not None}
-            fm["url"] = item["canonicalUrl"]
-            front = "\n".join(f"{k}: {json.dumps(v, ensure_ascii=False)}" for k, v in fm.items())
+            fm = {"title": content["title"], "url": item["url"], "author": content.get("author"), "published": content.get("published"),
+                  "words": content["words"], "images": content["images"], "extractedBy": content["extractedBy"], "extractedAt": content["extractedAt"]}
+            front = "\n".join(f"{k}: {json.dumps(v, ensure_ascii=False)}" for k, v in fm.items() if v is not None)
             (d / "content.md").write_text(f"---\n{front}\n---\n\n{content['markdown']}\n")
-            item["content"] = fm
-        item["captures"] = [{k: v for k, v in c.items() if k not in ("html", "_path")} for c in item["captures"]]
         (d / "item.json").write_text(json.dumps(item, indent=2, ensure_ascii=False) + "\n")
-        self.index[item["canonicalUrl"]] = item["id"]
+        self.index[item["url"]] = folder
         self.index_path.write_text(json.dumps(self.index, indent=2, sort_keys=True) + "\n")
 
     def feedback(self, line: dict) -> None:
@@ -157,29 +192,34 @@ class Store:
             f.write(json.dumps(line) + "\n")
 
 
+def capture_record(ev: dict) -> dict:
+    rec = {"at": ev["capturedAt"]}
+    rec.update({k: ev[k] for k in CAPTURE_KEEP if ev.get(k)})
+    return rec
+
+
 # ---------- run ----------
 
-def apply_removals(store: Store, events: list[dict]) -> list[dict]:
-    """Per canonical URL the last event in time decides. A remove retracts everything before it."""
+def apply_removals(store: Store, events: list[dict]) -> dict[str, list[dict]]:
+    """Group by canonical URL. Per URL the last event in time decides; a remove retracts everything before it."""
     groups: dict[str, list[dict]] = {}
     for ev in events:
         groups.setdefault(canonicalize(ev["url"]), []).append(ev)
-    survivors = []
+    survivors: dict[str, list[dict]] = {}
     for canonical, group in groups.items():
         group.sort(key=lambda e: (e["capturedAt"], e["action"] == "capture"))  # remove sorts first on a tie
         last_remove = max((i for i, e in enumerate(group) if e["action"] == "remove"), default=-1)
-        for i, ev in enumerate(group):
-            if ev["action"] == "capture" and i > last_remove:
-                survivors.append(ev)
-            else:
-                ev["_path"].unlink(missing_ok=True)
-        if last_remove == len(group) - 1:
-            iid = store.index.get(canonical)
-            item = store.get(iid) if iid else None
-            if item and item["status"] != "archived":
-                item.update(status="archived", updatedAt=now())
-                store.save(item)
-                store.feedback({"itemId": item["id"], "action": "archive", "reason": f"removed via {group[-1].get('source', '?')}", "createdAt": now()})
+        keep = [e for i, e in enumerate(group) if e["action"] == "capture" and i > last_remove]
+        for e in group:
+            if e not in keep:
+                e["_path"].unlink(missing_ok=True)
+        if keep:
+            survivors[canonical] = keep
+        elif (found := store.get(canonical)) and found[1]["status"] != "archived":
+            folder, item = found
+            item["status"] = "archived"
+            store.save(folder, item)
+            store.feedback({"item": folder, "action": "archive", "reason": f"removed via {group[-1].get('source', '?')}", "at": now()})
     return survivors
 
 
@@ -207,35 +247,38 @@ def main(argv: list[str]) -> int:
     events = load_events(store.inbox)
     if args.dry_run:
         for ev in events:
-            print(json.dumps({"id": ev["id"], "action": ev["action"], "canonicalUrl": canonicalize(ev["url"]), "hasHtml": bool(ev.get("html"))}))
+            print(json.dumps({"id": ev.get("id", ev["_path"].stem), "action": ev["action"], "url": canonicalize(ev["url"]), "hasHtml": bool(ev.get("html"))}))
         print(f"dry run: {len(events)} event(s), nothing written", file=sys.stderr)
         return 0
 
     ok = failed = 0
-    for ev in apply_removals(store, events):
-        canonical = canonicalize(ev["url"])
-        iid = store.index.get(canonical) or item_id(canonical)
-        item = store.get(iid) or {"id": iid, "canonicalUrl": canonical, "status": "captured", "captures": [], "createdAt": now()}
-        item["captures"].append(ev)
+    for canonical, evs in apply_removals(store, events).items():
+        found = store.get(canonical)
+        if found:
+            folder, item = found
+        else:
+            first = evs[0]
+            folder = store.new_folder(first["capturedAt"], first.get("title"), canonical)
+            item = {"url": canonical, "title": first.get("title"), "status": "captured", "mustRead": False, "captures": []}
+        item["captures"] += [capture_record(e) for e in evs]
+        item["mustRead"] = item["mustRead"] or any(e.get("mustRead") for e in evs)
         content = None
-        if "content" not in item:
-            content = acquire(item)
+        if not (store.items / folder / "content.md").exists():
+            content = acquire(canonical, evs)
             if content:
-                item["status"] = "extracted"
+                item.update(status="extracted", title=content["title"] or item.get("title"))
                 item.pop("failure", None)
                 ok += 1
             else:
-                item["status"] = "failed"
-                item["failure"] = f"no source yielded at least {MIN_WORDS} words"
+                item.update(status="failed", failure=f"no source yielded at least {MIN_WORDS} words")
                 failed += 1
-        item["updatedAt"] = now()
-        store.save(item, content)
-        ev["_path"].unlink(missing_ok=True)
-        title = item.get("content", {}).get("title") or canonical
+        store.save(folder, item, content)
+        for e in evs:
+            e["_path"].unlink(missing_ok=True)
         if args.json:
-            print(json.dumps({"id": iid, "status": item["status"], "title": title, "path": f"items/{iid}", "failure": item.get("failure")}))
+            print(json.dumps({"item": f"items/{folder}", "status": item["status"], "title": item.get("title"), "failure": item.get("failure")}))
         else:
-            print(f"{item['status']:9} items/{iid}  {title}")
+            print(f"{item['status']:9} items/{folder}")
     print(f"done: {ok} extracted, {failed} failed", file=sys.stderr)
     return 0
 

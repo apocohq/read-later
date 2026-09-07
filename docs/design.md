@@ -7,7 +7,7 @@ Status: direction for the first versions. Complements `product-brief.md`; where 
 | Stage | Question it answers | Where | Output |
 |---|---|---|---|
 | **Capture** | How does material get to the agent? | `extension/` today; a Slack sweep later | `inbox/<id>.json` |
-| **Curate** | What is it, is it worth reading, and how does it rank? | `skills/read-later-ingest/scripts/` (`ingest.py` today; `evaluate.py`, `rank.py` planned) | `items/<id>/` (item.json, content.md), `queue.json` |
+| **Curate** | What is it, is it worth reading, and how does it rank? | `skills/read-later-ingest/scripts/` (`ingest.py` today; `evaluate.py`, `rank.py` planned) | `items/<time>-<slug>/` (item.json, content.md), `queue.json` |
 | **Consume** | How is the result presented and acted on? | planned | `queue.md`, `queue.html` |
 
 Code ships as an Agent Skill installed from this repo. State lives on the agent under `~/work/read-later/`. Each stage reads and writes only files there, so stages can be run and tested independently.
@@ -27,13 +27,13 @@ Deterministic steps, today in `ingest.py` (1 to 3), the rest planned:
 
 1. apply retractions: a `remove` event is a retraction, not a delete. Per canonical URL the last event in the batch decides, ordered by `capturedAt` — a remove drops the captures before it (they are never fetched or evaluated) and archives the item if it was already processed; a capture after it survives and nothing is archived. The extension cannot delete from the workspace itself: its key is upload-only, and once processed there is no inbox file to delete, only an item to archive;
 2. canonicalize URL, dedup against `index.json` (one item per canonical URL, captures appended);
-3. acquire content, first source that succeeds: reader-view extraction (trafilatura) of the HTML the browser captured; server-side fetch + the same extraction; capturer-supplied plain text;
+3. acquire content, first source that succeeds: reader-view extraction (readability + markdownify, metadata via trafilatura) of the HTML the browser captured; server-side fetch + the same extraction; capturer-supplied plain text;
 4. assemble context (`profile.md`; later other context files the agent maintains);
 5. evaluate through a structured model call (`Evaluator`); article text is data, not prompt;
 6. prune: archive filtered-out items immediately and unread items after 14 days, never must-reads;
 7. rank with weighted 0-5 dimensions, penalty terms weighted so they cannot swamp the base, must-read as a hard boost; caps of one Read today and four Read next.
 
-`items/<id>/content.md` is pure text and images with frontmatter (title, url, author, published, words). Every consumption surface, including future audio and e-ink, renders from this file.
+`items/<time>-<slug>/content.md` is text, tables and images with frontmatter (title, url, author, published, words). Every consumption surface, including future audio and e-ink, renders from this file.
 
 ## Consume
 

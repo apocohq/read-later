@@ -34,29 +34,51 @@ Written by producers (today: the Chrome extension), read only by `scripts/ingest
 
 Files that are not valid JSON or lack `url`/`capturedAt` are skipped with a message and left in place.
 
-## Item — `items/<id>/item.json`
+## Item — `items/<folder>/item.json`
 
-`id` is the first 12 hex chars of SHA-256 of the canonical URL, so one page always maps to one folder.
+The folder is `<first capture time>-<title slug>`, e.g. `2026-09-07T13-00-00Z-running-a-software-factory-efficiently-at-uber-scale`. Folders sort by capture time and read like a list of what you saved. Dedup does not depend on the name: `index.json` maps canonical URL → folder.
 
 ```json
 {
-  "id": "3f9a1c7e2b04",
-  "canonicalUrl": "https://example.com/post",
+  "url": "https://uber.com/us/en/blog/efficient-software-factory",
+  "title": "Running a Software Factory Efficiently at Uber Scale",
   "status": "extracted",
-  "captures": [ { "...the inbox event without html..." } ],
-  "content": { "title": "…", "author": "…", "published": "…", "wordCount": 1234, "extractedBy": "capture", "extractedAt": "…" },
-  "createdAt": "…",
-  "updatedAt": "…"
+  "mustRead": false,
+  "captures": [
+    { "at": "2026-09-07T13:00:00.000Z", "source": "browser", "selectedText": "70% of pull requests" },
+    { "at": "2026-09-07T13:03:00.000Z", "source": "browser", "note": "second time" }
+  ]
 }
 ```
 
-`status`: `captured` → `extracted` | `failed` (with `failure` reason) → `archived`.
+| field | meaning |
+|---|---|
+| `url` | canonical URL, the item's identity |
+| `title` | from extraction, else from the capture |
+| `status` | `captured` → `extracted` \| `failed` (adds `failure`) → `archived` |
+| `mustRead` | true once any capture said so; never reset |
+| `captures[]` | one per capture: `at`, `source`, and only the user's signals if present: `note`, `selectedText`, `recommendedBy`, `sourceRef` |
 
-## Article — `items/<id>/content.md`
+Later skills add their own top-level keys (e.g. `analysis`). Extraction metadata is not repeated here; it lives in `content.md`.
 
-YAML-ish frontmatter (same keys as `content` above plus `url`), a blank line, then Markdown.
+## Article — `items/<folder>/content.md`
+
+Frontmatter, a blank line, then Markdown with headings, links, tables and images (absolute URLs).
+
+```
+---
+title: "Running a Software Factory Efficiently at Uber Scale"
+url: "https://uber.com/us/en/blog/efficient-software-factory"
+author: "…"            # when found
+published: "2026-09-02" # when found; heuristic, treat as approximate
+words: 3465
+images: 8
+extractedBy: "capture"  # capture | fetch | capture-text
+extractedAt: "2026-09-07T13:37:31.336Z"
+---
+```
 
 ## Index and log
 
-- `index.json`: canonical URL → item id.
-- `feedback.jsonl`: append-only, one JSON object per line, e.g. `{"itemId","action":"archive","reason","createdAt"}`.
+- `index.json`: canonical URL → item folder.
+- `feedback.jsonl`: append-only, one JSON object per line, e.g. `{"item": "<folder>", "action": "archive", "reason": "removed via browser", "at": "…"}`.

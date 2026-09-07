@@ -32,8 +32,8 @@ uv run scripts/ingest.py ~/work/read-later
 
 1. **Canonicalize and dedupe.** Strips fragment, `www.`, tracking params. The same page captured twice is one item with two capture records.
 2. **Retract.** A `remove` event retracts captures of the same URL that came before it. Unprocessed ones are dropped; an already extracted item is archived and a line goes to `feedback.jsonl`. Nothing is ever deleted from `items/`.
-3. **Extract.** Captured HTML → trafilatura → Markdown plus title, author, date, word count. Fallback: fetch the URL. Fallback: the event's own `text`. Under 80 words counts as failure.
-4. **Save.** `items/<id>/item.json` and `content.md`. The HTML is not kept. The inbox file is deleted.
+3. **Extract.** Captured HTML → readability + markdownify → Markdown with headings, links, tables and images; title, author and date via trafilatura. Fallback: fetch the URL. Fallback: the event's own `text`. Under 80 words counts as failure.
+4. **Save.** `items/<capturedAt>-<title slug>/item.json` and `content.md`. The HTML is not kept. The inbox file is deleted.
 
 ## Files
 
