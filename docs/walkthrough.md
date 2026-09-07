@@ -63,7 +63,7 @@ Tested locally on a real 211 KB capture: 2682 words extracted, duplicate capture
 
 **Tested on the agent:** installed via `dam skill source add <repo url>` + `dam skill install <agent> --source <repo url> --name read-later-ingest`; bookmarks in Chrome became items with images, author and date; removes and duplicates accounted for; the agent reports the script output and stops.
 
-## Step 3 · Analyze: TL;DR, category, topics, two scores  ⏭ testing
+## Step 3 · Analyze: TL;DR, category, topics, two scores  ✅ works
 
 Skill `read-later-analyze`. Decided in the grilling of 2026-09-07:
 
@@ -76,13 +76,15 @@ Skill `read-later-analyze`. Decided in the grilling of 2026-09-07:
 node scripts/analyze.mjs --connection ibm-litellm ~/work/read-later
 ```
 
-## Step 4 · Rank: tonight's queue  ⏭ testing
+## Step 4 · Rank: tonight's queue  ✅ works
 
 Skill `read-later-rank`, `scripts/rank.py`, standard library only, no model. Per item: relevance = mean of the two highest topic weights among its topics; quality = mean of hard-won and grounded; priority = half of each, −1 for over 4000 words, +3 for must-read. Excludes archived, unanalyzed, not-an-article, and news older than 14 days. Top item = Read today, next four = Read next, rest = Later. Writes `queue.md` and `queue.json`. Changing a weight in `topics.md` and rerunning is the feedback loop.
 
 Tested locally on the three test articles with a stub SDK: ingest → analyze (one injected failure, retried next run, coined topics appended to `topics.md`) → rank; raising `code-review` to 10 lifted the Fowler piece from third to second (its quality scores still keep it below the Uber piece).
 
-**Test on first-reader:** skills installed, `ibm-litellm` granted, the three articles in the inbox; a temporary schedule triggers *"ingest, analyze and rank read later"*; verify via session transcript, `item.json` and `queue.md`.
+**Tested on first-reader (2026-09-07):** a scheduled unattended run did ingest → analyze → rank end to end. Analyze spawned three Invocations in parallel, each with the model connection only; all three returned schema-valid results in about three minutes. Scores: Uber hard-won 9 / grounded 8, KubeStellar 8 / 7, Fowler 5 / 7, each with a reason that names evidence from the text. TL;DRs 70-76 words. Four topics coined (`open-source-maintenance`, `prompt-caching`, `context-engineering`, `pair-programming`) and appended to `topics.md`. Rank put Uber in Read today. The agent reported the script outputs and stopped.
+
+Known gaps from that run: the analyzer put KubeStellar under `ai-and-agents` where the categorize prompt's "reader's angle" rule suggests `engineering`; all topic weights were still 5, so relevance did not separate the items yet.
 
 ## Step 5 · Deliver + daily schedule  ⏸ later
 
