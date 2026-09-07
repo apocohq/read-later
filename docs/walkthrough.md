@@ -44,10 +44,10 @@ Nothing flows back to the browser. The extension keeps its own local list of sav
 
 ## Step 2 · Agent turns an inbox file into a clean article  ⏭ next
 
-The code ships as an **Agent Skill** (`skills/read-later/`), installed onto agents from this repo. No code to copy per agent and no bundled libraries: the script declares its dependencies inline (PEP 723) and `uv run` installs them on first use. uv is in the DAM agent image.
+The code ships as an **Agent Skill** (`skills/read-later-ingest/`), installed onto agents from this repo. No code to copy per agent and no bundled libraries: the script declares its dependencies inline (PEP 723) and `uv run` installs them on first use. uv is in the DAM agent image.
 
 ```
-skills/read-later/
+skills/read-later-ingest/
   SKILL.md                 when to use it, how to run it, the rules
   scripts/ingest.py       inbox → items   (uv run scripts/ingest.py ~/work/read-later)
   references/contract.md   inbox event, item.json, content.md shapes
@@ -63,7 +63,7 @@ Tested locally on a real 211 KB capture: 2682 words extracted, duplicate capture
 
 **Test on the agent:**
 
-1. Push this repo to GitHub, then `dam skill source add <repo url>` and `dam skill install <agent> --source <repo url> --name read-later`.
+1. Push this repo to GitHub, then `dam skill source add <repo url>` and `dam skill install <agent> --source <repo url> --name read-later-ingest`.
 2. Bookmark a page in Chrome.
 3. Ask the agent: *"process the read-later inbox"*. The first run downloads packages (~30 s). Expect one `extracted` line.
 4. Ask it to show `~/work/read-later/items/*/content.md`. It should read like the article.

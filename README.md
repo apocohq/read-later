@@ -7,21 +7,21 @@ Chrome extension  ──files.upload──▶  ~/work/read-later/inbox/<id>.json
 ```
 
 - `extension/` — the Chrome extension. Setup in `extension/README.md`.
-- `skills/read-later/` — the agent skill. Install it onto any DAM agent from this repo.
+- `skills/` — the agent skills, one per capability (`read-later-ingest` today). Install them onto any DAM agent from this repo.
 - `docs/walkthrough.md` — where we are and what is next.
 
 ## Install the skill on an agent
 
 ```sh
 dam skill source add https://github.com/<org>/read-later      # once
-dam skill install <agent> --source https://github.com/<org>/read-later --name read-later
+dam skill install <agent> --source https://github.com/<org>/read-later --name read-later-ingest
 ```
 
-Re-run install to update. Then ask the agent: *"process the read-later inbox"*.
+Re-run install to update. Then ask the agent: *"ingest the read-later inbox"*.
 
 ## Develop
 
 ```sh
 pnpm install && pnpm typecheck && pnpm ext:build        # extension → extension/dist
-uv run skills/read-later/scripts/ingest.py --help      # skill script
+uv run skills/read-later-ingest/scripts/ingest.py --help      # skill script
 ```

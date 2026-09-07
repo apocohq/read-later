@@ -1,6 +1,6 @@
 /**
  * Wire contract between the extension and the agent inbox. Mirrors
- * `skills/read-later/references/contract.md`; keep the two in sync.
+ * `skills/read-later-ingest/references/contract.md`; keep the two in sync.
  */
 export interface BrowserCapture {
   id: string;

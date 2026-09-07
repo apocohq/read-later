@@ -1,12 +1,12 @@
 ---
-name: read-later
-description: Turns pages bookmarked from the Chrome extension into clean Markdown articles. Use when asked to process the read-later inbox, run the read-later pipeline, or when files appear under ~/work/read-later/inbox.
+name: read-later-ingest
+description: Ingests the read-later inbox. Turns pages bookmarked from the Chrome extension (JSON events under ~/work/read-later/inbox) into deduplicated items with clean Markdown articles under ~/work/read-later/items. Use when asked to process or ingest the read-later inbox, or before evaluating or ranking read-later items.
 compatibility: Requires uv (ships in the DAM agent image) and network access to pypi.org on first run.
 metadata:
   version: "0.2"
 ---
 
-# Read Later
+# Read Later · Ingest
 
 A Chrome extension drops one JSON file per bookmark into `~/work/read-later/inbox/`.
 This skill drains that inbox into `~/work/read-later/items/`, one folder per article,
@@ -45,6 +45,6 @@ See [references/contract.md](references/contract.md) for the inbox event, `item.
 - Never delete anything under `items/`. Archive by status.
 - If the script fails to start (uv missing, no network), report that rather than reimplementing the extraction by hand.
 
-## Status of this skill
+## Related skills
 
-Extraction only. Evaluation, ranking and the reading queue are the next steps and will land as further scripts in this skill.
+This skill only ingests. Evaluation and ranking (`read-later-evaluate`), Slack capture (`read-later-slack-sweep`) and delivery (`read-later-deliver`) are separate skills that read and write the same `~/work/read-later/` state described in `references/contract.md`.

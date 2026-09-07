@@ -7,7 +7,7 @@ Status: direction for the first versions. Complements `product-brief.md`; where 
 | Stage | Question it answers | Where | Output |
 |---|---|---|---|
 | **Capture** | How does material get to the agent? | `extension/` today; a Slack sweep later | `inbox/<id>.json` |
-| **Curate** | What is it, is it worth reading, and how does it rank? | `skills/read-later/scripts/` (`ingest.py` today; `evaluate.py`, `rank.py` planned) | `items/<id>/` (item.json, content.md), `queue.json` |
+| **Curate** | What is it, is it worth reading, and how does it rank? | `skills/read-later-ingest/scripts/` (`ingest.py` today; `evaluate.py`, `rank.py` planned) | `items/<id>/` (item.json, content.md), `queue.json` |
 | **Consume** | How is the result presented and acted on? | planned | `queue.md`, `queue.html` |
 
 Code ships as an Agent Skill installed from this repo. State lives on the agent under `~/work/read-later/`. Each stage reads and writes only files there, so stages can be run and tested independently.
