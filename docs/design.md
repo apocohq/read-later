@@ -26,7 +26,7 @@ LinkedIn is out of scope for now.
 Steps: `ingest.py` (1 to 3), `analyze.mjs` (4), `rank.py` (5 to 7):
 
 1. apply retractions: a `remove` event is a retraction, not a delete. Per canonical URL the last event in the batch decides, ordered by `capturedAt` — a remove drops the captures before it (they are never fetched or evaluated) and archives the item if it was already processed; a capture after it survives and nothing is archived. The extension cannot delete from the workspace itself: its key is upload-only, and once processed there is no inbox file to delete, only an item to archive;
-2. canonicalize URL, dedup against `index.json` (one item per canonical URL, captures appended);
+2. canonicalize URL, dedup by the canonical `url` in existing `item.json` files (one item per canonical URL, captures appended);
 3. acquire content, first source that succeeds: reader-view extraction (readability + markdownify, metadata via trafilatura) of the HTML the browser captured; server-side fetch + the same extraction; capturer-supplied plain text;
 4. analyze in an ephemeral DAM Invocation holding only the model connection: TL;DR, key claims, content type, category, topics, hard-won and grounded (0-10 with reasons). Article-only, so it never goes stale; result schema-validated by the platform; article text is data, not prompt. Rubric in the skill, overrides and the topic vocabulary in the state dir;
 5. relevance from **topic weights** in `topics.md` (the reader's interests, edited by hand or by the host agent from its memory), not from a per-article model judgment: when focus shifts, a few numbers change and the whole pool re-ranks for free;
