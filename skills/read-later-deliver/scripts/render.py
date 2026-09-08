@@ -123,7 +123,7 @@ def main(argv: list[str]) -> int:
     digest = hashlib.sha256((json.dumps({**data, "generatedAt": None}, sort_keys=True, ensure_ascii=False) + template).encode()).hexdigest()
     dpath = root / "deliver.json"
     state = json.loads(dpath.read_text()) if dpath.exists() else {}
-    changed = state.get("contentHash") != digest
+    changed = state.get("contentHash") != digest or not state.get("artifactId")  # never published yet counts as changed
     state["contentHash"] = digest
     dpath.write_text(json.dumps(state, indent=2) + "\n")
     print(json.dumps({"html": str(root / "queue.html"), "changed": changed, "artifactId": state.get("artifactId"), "items": len(items)}))
