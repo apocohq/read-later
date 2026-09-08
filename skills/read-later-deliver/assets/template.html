@@ -88,6 +88,37 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 .article ul,.article ol{padding-left:1.4em}.article li{margin:.25em 0}.article table{border-collapse:collapse;font-size:14px}.article td,.article th{border:1px solid var(--line);padding:4px 8px}
 .article hr{border:0;border-top:1px solid var(--line);margin:1.5em 0}
 .note{font-size:12.5px;color:var(--ink3)}
+
+/* highlights */
+.pane{position:relative}
+.hls{border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:grid;gap:10px}
+.hls .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.hls .row .n{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-right:auto}
+.hls .row .n b{color:var(--ink);letter-spacing:0;font-size:14px}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.hls ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.hls li{font-size:14px;line-height:1.45;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start}
+.hls li .q{border-left:3px solid var(--accent2);padding-left:10px;color:var(--ink);cursor:pointer}
+.hls li .q:hover{color:var(--accent)}
+.hls li .q .nt{display:block;color:var(--ink2);font-size:13px;margin-top:2px}
+.hls li .q.orphan{border-left-color:var(--line);color:var(--ink3)}
+.hls li .x{border:0;background:none;color:var(--ink3);cursor:pointer;font-size:16px;line-height:1;padding:0 4px}
+.hls li .x:hover{color:var(--accent)}
+.hls .hint{font-size:12.5px;color:var(--ink3);margin:0}
+.hls .warn{font-size:12.5px;color:var(--accent);margin:0}
+.article.hl-on{cursor:text}
+.article.hl-on ::selection{background:color-mix(in srgb,var(--accent2) 55%,transparent)}
+mark.hl{background:color-mix(in srgb,var(--accent2) 42%,transparent);color:inherit;border-radius:2px;padding:0 1px;cursor:pointer}
+mark.hl.local{box-shadow:inset 0 -2px 0 var(--accent)}
+mark.hl.noted{text-decoration:underline dotted var(--accent) 2px;text-underline-offset:3px}
+mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
+.pop{position:absolute;z-index:3;background:var(--paper);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);padding:8px;display:grid;gap:6px;width:min(320px,calc(100% - 40px))}
+.pop input{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:6px;padding:6px 8px;font:inherit;font-size:13px;width:100%}
+.pop .row{display:flex;gap:6px;justify-content:flex-end}
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:999px;font-size:13px;z-index:20;box-shadow:var(--shadow);opacity:0;transition:opacity .2s}
+.toast.show{opacity:1}
+.copybox{display:grid;gap:6px}
+.copybox textarea{width:100%;height:120px;font:12px ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);padding:8px}
 @media (max-width:640px){main{padding:24px 16px 70px}.grid{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:16px 12px}.pane .head,.pane .body{padding-left:20px;padding-right:20px}}
 @media (prefers-reduced-motion:reduce){.pane{animation:none}.tile:hover .cover{transform:none}}
 </style>
@@ -116,6 +147,8 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
   <div class="pane" id="pane"></div>
 </div>
 
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
 <script id="data" type="application/json">/*__DATA__*/</script>
 <script>
 (function(){
@@ -136,7 +169,7 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
       <div class="cover" style="${colors(it.category)}">
         <div class="kicker"><span class="cat">${esc(it.category||'')}</span>${it.mustRead ? '<span class="pill">must</span>' : ''}</div>
         <div class="title serif">${esc(it.title||it.url)}</div>
-        <div class="foot"><span>${esc(domain(it.url))}</span><span>${esc(it.minutes)} min</span></div>
+        <div class="foot"><span>${esc(domain(it.url))}</span><span>${esc(it.minutes)} min${HL.current(it).length ? ' · '+HL.current(it).length+' ✎' : ''}</span></div>
       </div>
       <div class="under">
         <div class="bars">
@@ -154,7 +187,7 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
     for (const key of ['read_today','read_next','later']){
       const sec = document.getElementById('s-'+key), grid = sec.querySelector('.grid');
       grid.innerHTML = '';
-      const rows = items.filter(it => it.bucket===key && (filter==='all' || filter===key) && (!q || [it.title, it.tldr, (it.topics||[]).join(' '), it.category, it.markdown].join(' ').toLowerCase().includes(q)));
+      const rows = items.filter(it => it.bucket===key && (filter==='all' || filter===key) && (!q || [it.title, it.tldr, (it.topics||[]).join(' '), it.category, it.markdown, HL.current(it).map(h => h.exact+' '+(h.note||'')).join(' ')].join(' ').toLowerCase().includes(q)));
       document.getElementById('n-'+key).textContent = rows.length ? `${rows.length}` : '';
       sec.style.display = (filter==='all' || filter===key) ? '' : 'none';
       if (!rows.length){ grid.insertAdjacentHTML('beforeend', `<div class="empty">${q ? 'No match.' : 'Nothing here.'}</div>`); continue; }
@@ -190,6 +223,86 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
     return out.join('\n');
   }
 
+  // --- highlights: kept in this browser while reading, sent to the agent as one JSON object ---
+  // Anchors are W3C TextQuoteSelector (exact/prefix/suffix) plus TextPositionSelector (start/end) into the article's textContent.
+  const HL = (() => {
+    const CTX = 32;
+    const key = id => 'rl:hl:' + id;
+    let storageOk = true;
+    const load = it => { try { return JSON.parse(localStorage.getItem(key(it.id)) || 'null') || {added:[], deleted:[]}; } catch { storageOk = false; return {added:[], deleted:[]}; } };
+    const save = (it, st) => { try { localStorage.setItem(key(it.id), JSON.stringify(st)); storageOk = true; } catch { storageOk = false; } };
+    const synced = it => it.highlights || [];
+    // Reconcile with what the agent has: a local addition the agent now knows is synced; a local deletion the agent applied is over.
+    function state(it){
+      const st = load(it), ids = new Set(synced(it).map(h => h.id));
+      const added = st.added.filter(h => !ids.has(h.id)), deleted = st.deleted.filter(id => ids.has(id));
+      if (added.length !== st.added.length || deleted.length !== st.deleted.length) save(it, {added, deleted});
+      return {added, deleted};
+    }
+    function current(it){
+      const st = state(it), gone = new Set(st.deleted);
+      return [...synced(it).filter(h => !gone.has(h.id)), ...st.added].sort((a,b) => (a.start ?? 0) - (b.start ?? 0));
+    }
+    const isLocal = (it, id) => !synced(it).some(h => h.id === id);
+    function add(it, h){ const st = state(it); st.added.push(h); save(it, st); }
+    function remove(it, id){ const st = state(it); st.added = st.added.filter(h => h.id !== id); if (!isLocal(it, id) && !st.deleted.includes(id)) st.deleted.push(id); save(it, st); }
+    function setNote(it, id, note){
+      const st = state(it); const mine = st.added.find(h => h.id === id);
+      if (mine){ if (note) mine.note = note; else delete mine.note; }
+      else { const src = synced(it).find(h => h.id === id); if (!src) return; const copy = {...src}; if (note) copy.note = note; else delete copy.note; st.added.push(copy); if (!st.deleted.includes(id)) st.deleted.push(id); copy.id = newId('h'); }
+      save(it, st);
+    }
+    const newId = (p='h') => p + '-' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-3);
+
+    // --- anchoring ---
+    function textNodes(root){ const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT), out = []; let n; while ((n = w.nextNode())) out.push(n); return out; }
+    function offsetOf(root, node, offset){ const r = document.createRange(); r.selectNodeContents(root); r.setEnd(node, offset); return r.toString().length; }
+    function fromSelection(root){
+      const sel = window.getSelection(); if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
+      const r = sel.getRangeAt(0); if (!root.contains(r.startContainer) || !root.contains(r.endContainer)) return null;
+      const exact = r.toString(); if (!exact.trim()) return null;
+      const start = offsetOf(root, r.startContainer, r.startOffset), end = start + exact.length, text = root.textContent;
+      return { id: newId(), exact, prefix: text.slice(Math.max(0, start - CTX), start), suffix: text.slice(end, end + CTX), start, end, createdAt: new Date().toISOString() };
+    }
+    function locate(text, h){
+      if (Number.isInteger(h.start) && text.slice(h.start, h.start + h.exact.length) === h.exact) return h.start;
+      const hits = []; for (let i = text.indexOf(h.exact); i !== -1; i = text.indexOf(h.exact, i + 1)) hits.push(i);
+      if (!hits.length) return -1; if (hits.length === 1) return hits[0];
+      const score = i => { const pre = text.slice(Math.max(0, i - CTX), i), suf = text.slice(i + h.exact.length, i + h.exact.length + CTX); let sc = 0;
+        for (let k = 1; k <= Math.min(pre.length, (h.prefix||'').length) && pre[pre.length-k] === h.prefix[h.prefix.length-k]; k++) sc++;
+        for (let k = 0; k < Math.min(suf.length, (h.suffix||'').length) && suf[k] === h.suffix[k]; k++) sc++; return sc; };
+      return hits.map(i => [score(i), i]).sort((a,b) => b[0]-a[0] || a[1]-b[1])[0][1];
+    }
+    function wrap(root, start, end, mk){
+      let pos = 0;
+      for (let node of textNodes(root)){
+        const len = node.data.length, ns = pos, ne = pos + len; pos = ne;
+        if (ne <= start || ns >= end || !len) continue;
+        if (start > ns) node = node.splitText(start - ns);
+        if (end < ne) node.splitText(end - Math.max(start, ns));
+        const m = mk(); node.parentNode.insertBefore(m, node); m.appendChild(node);
+      }
+    }
+    function apply(root, it){
+      const text = root.textContent, orphans = [];
+      for (const h of current(it)){
+        const at = locate(text, h); if (at < 0){ orphans.push(h.id); continue; }
+        wrap(root, at, at + h.exact.length, () => { const m = document.createElement('mark'); m.className = 'hl' + (isLocal(it, h.id) ? ' local' : '') + (h.note ? ' noted' : ''); m.dataset.id = h.id; if (h.note) m.title = h.note; return m; });
+      }
+      return orphans;
+    }
+    // --- outbox: one JSON object per send; today the clipboard, later DAM's artifact bridge ---
+    const event = (it, action) => ({ id: new Date().toISOString().replace(/[:.]/g,'-') + '-' + Math.random().toString(36).slice(2,7), action, source: 'artifact', url: it.url, item: it.id, title: it.title, highlights: current(it).map(({id, exact, prefix, suffix, start, end, note, createdAt}) => ({id, exact, prefix, suffix, start, end, ...(note ? {note} : {}), createdAt})), capturedAt: new Date().toISOString() });
+    const transports = [
+      async (ev, ui) => { const text = JSON.stringify(ev, null, 2); try { await navigator.clipboard.writeText(text); ui.toast(ev.action === 'done' ? 'Copied. Paste it to your agent to finish this article.' : 'Copied. Paste it to your agent.'); } catch { ui.fallback(text); } return true; },
+    ];
+    async function emit(it, action, ui){ const ev = event(it, action); for (const t of transports) if (await t(ev, ui)) return ev; return null; }
+    return { current, isLocal, add, remove, setNote, fromSelection, apply, emit, storageOk: () => storageOk };
+  })();
+
+  const toastEl = document.getElementById('toast'); let toastTimer;
+  function toast(msg){ toastEl.textContent = msg; toastEl.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), 3200); }
+
   const reader = document.getElementById('reader'), pane = document.getElementById('pane');
   function open(it){
     const sc = (k, label) => { const s = it[k] || {}; return `<div class="score"><div class="n"><span>${label}</span><b>${esc(s.score ?? '–')}<span style="color:var(--ink3);font-size:11px"> /10</span></b></div><div class="bar ${k==='hardWon'?'hw':'gr'}">${slots(s.score)}</div><p>${esc(s.reason||'')}</p></div>`; };
@@ -214,14 +327,73 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
           <div class="score"><div class="n"><span>relevance</span><b>${esc(it.relevance ?? '–')}<span style="color:var(--ink3);font-size:11px"> /10</span></b></div><div class="bar rl">${slots(it.relevance)}</div><p>From the weights of its topics in topics.md. Priority ${esc(it.priority)}${(it.notes||[]).length ? ' · '+esc(it.notes.join(', ')) : ''}.</p></div>
         </div>
         <div class="tags">${(it.topics||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>
+        <div class="hls" id="hls"></div>
         <div class="divider">The article</div>
-        <div class="article serif">${it.markdown ? md(it.markdown) : '<p class="note">Full text not included.</p>'}</div>
+        <div class="article serif" id="article"></div>
       </div>`;
     pane.querySelector('.close').addEventListener('click', close);
     reader.classList.add('open'); document.body.style.overflow = 'hidden'; pane.scrollTop = 0;
     history.replaceState(null, '', '#'+encodeURIComponent(it.id||''));
+    mountHighlights(it);
   }
-  function close(){ reader.classList.remove('open'); document.body.style.overflow = ''; history.replaceState(null, '', location.pathname); }
+  function close(){ reader.classList.remove('open'); document.body.style.overflow = ''; history.replaceState(null, '', location.pathname); closePop(); hlOn = false; }
+
+  // --- highlighter UI inside the reader ---
+  let hlOn = false, pop = null;
+  function closePop(){ if (pop){ pop.remove(); pop = null; } }
+  function mountHighlights(it){
+    const article = document.getElementById('article'), panel = document.getElementById('hls');
+    let orphans = [];
+    function renderArticle(){
+      article.innerHTML = it.markdown ? md(it.markdown) : '<p class="note">Full text not included.</p>';
+      orphans = HL.apply(article, it);
+      article.classList.toggle('hl-on', hlOn);
+    }
+    function renderPanel(){
+      const list = HL.current(it), unsent = list.filter(h => HL.isLocal(it, h.id)).length;
+      panel.innerHTML = `
+        <div class="row">
+          <span class="n">Highlights <b>${list.length}</b>${unsent ? ` <span title="not yet sent to the agent">· ${unsent} unsent</span>` : ''}</span>
+          <button class="chip ${hlOn ? 'on' : ''}" id="hl-toggle" aria-pressed="${hlOn}">${hlOn ? 'Highlighter on' : 'Highlighter off'}</button>
+          <button class="chip" id="hl-copy" ${list.length ? '' : 'disabled'} title="Copy the highlights as JSON for your agent">Copy for chat</button>
+          <button class="chip" id="hl-done" title="Copy a done event with the highlights for your agent">Done reading</button>
+        </div>
+        ${list.length ? `<ul>${list.map(h => `<li><div class="q ${orphans.includes(h.id) ? 'orphan' : ''}" data-id="${esc(h.id)}" title="${orphans.includes(h.id) ? 'Not found in this text' : 'Show in the article'}">${esc(h.exact.length > 220 ? h.exact.slice(0, 220) + '…' : h.exact)}${h.note ? `<span class="nt">${esc(h.note)}</span>` : ''}</div><button class="x" data-id="${esc(h.id)}" aria-label="Remove highlight" title="Remove">×</button></li>`).join('')}</ul>` : `<p class="hint">${hlOn ? 'Select text in the article to highlight it. Click a highlight for a note or to remove it.' : 'Turn the highlighter on, then select text in the article.'}</p>`}
+        ${HL.storageOk() ? '' : '<p class="warn">This browser is not keeping highlights between visits. Copy them before you close the page.</p>'}
+        <div class="copybox" id="copybox" hidden></div>`;
+      panel.querySelector('#hl-toggle').addEventListener('click', () => { hlOn = !hlOn; closePop(); renderPanel(); article.classList.toggle('hl-on', hlOn); });
+      panel.querySelector('#hl-copy').addEventListener('click', () => HL.emit(it, 'highlight', ui));
+      panel.querySelector('#hl-done').addEventListener('click', () => HL.emit(it, 'done', ui));
+      panel.querySelectorAll('.q').forEach(q => q.addEventListener('click', () => { const m = article.querySelector(`mark.hl[data-id="${q.dataset.id}"]`); if (!m) return; m.scrollIntoView({block:'center', behavior:'smooth'}); m.classList.add('flash'); setTimeout(() => m.classList.remove('flash'), 1200); }));
+      panel.querySelectorAll('.x').forEach(x => x.addEventListener('click', () => { HL.remove(it, x.dataset.id); refresh(); }));
+    }
+    const ui = {
+      toast,
+      fallback(text){ const box = panel.querySelector('#copybox'); box.hidden = false; box.innerHTML = '<p class="hint">Clipboard unavailable here. Select all and copy, then paste it to your agent.</p><textarea readonly></textarea>'; const ta = box.querySelector('textarea'); ta.value = text; ta.focus(); ta.select(); },
+    };
+    function refresh(){ closePop(); renderArticle(); renderPanel(); }
+    article.addEventListener('pointerup', () => {
+      if (!hlOn) return;
+      setTimeout(() => { const h = HL.fromSelection(article); if (!h) return; HL.add(it, h); window.getSelection()?.removeAllRanges(); refresh(); }, 0);
+    });
+    article.addEventListener('click', e => {
+      const m = e.target.closest('mark.hl'); if (!m) return;
+      e.preventDefault(); closePop();
+      const h = HL.current(it).find(x => x.id === m.dataset.id); if (!h) return;
+      pop = document.createElement('div'); pop.className = 'pop';
+      pop.innerHTML = `<input type="text" placeholder="Add a note" aria-label="Note" value="${esc(h.note||'')}"><div class="row"><button class="chip" data-a="remove">Remove</button><button class="chip" data-a="save">Save</button></div>`;
+      pane.appendChild(pop);
+      const r = m.getBoundingClientRect(), pr = pane.getBoundingClientRect();
+      pop.style.top = (r.bottom - pr.top + pane.scrollTop + 6) + 'px'; pop.style.left = Math.max(12, Math.min(r.left - pr.left, pr.width - pop.offsetWidth - 12)) + 'px';
+      const input = pop.querySelector('input'); input.focus();
+      const saveNote = () => { HL.setNote(it, h.id, input.value.trim()); refresh(); };
+      pop.querySelector('[data-a="save"]').addEventListener('click', saveNote);
+      input.addEventListener('keydown', ev => { if (ev.key === 'Enter') saveNote(); if (ev.key === 'Escape'){ ev.stopPropagation(); closePop(); } });
+      pop.querySelector('[data-a="remove"]').addEventListener('click', () => { HL.remove(it, h.id); refresh(); });
+    });
+    pane.addEventListener('pointerdown', e => { if (pop && !pop.contains(e.target) && !e.target.closest('mark.hl')) closePop(); });
+    renderArticle(); renderPanel();
+  }
   reader.addEventListener('click', e => { if (e.target === reader) close(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && reader.classList.contains('open')) close(); });
 

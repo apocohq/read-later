@@ -22,17 +22,56 @@ Written by producers (today: the Chrome extension), read only by `scripts/ingest
 | field | required | meaning |
 |---|---|---|
 | `id` | yes | unique, time-sortable, also the filename |
-| `action` | no | `capture` (default); `remove` = retract earlier captures of this URL (drop if unprocessed, archive if processed); `done` = the reader finished it |
-| `source` | yes | `browser`; other producers may add their own value |
+| `action` | no | `capture` (default); `remove` = retract earlier captures of this URL (drop if unprocessed, archive if processed); `done` = the reader finished it; `highlight` = the reader's highlights changed |
+| `source` | yes | `browser` (extension), `artifact` (the library page), `chat` (the agent, on the reader's word); other producers may add their own value |
 | `url` | yes | as seen; canonicalization happens here, not in the producer |
 | `title` | no | page title |
 | `selectedText`, `note` | no | the user's own signal why it matters |
 | `html` | no | full rendered DOM; makes paywalled and JS-rendered pages work |
 | `text` | no | readable text supplied by a producer that has no HTML |
 | `mustRead` | no | hard override for later ranking; never filtered out |
+| `item` | no | the item folder name, when the producer knows it (the library page does). Lookup is still by `url` |
+| `highlights` | no | with `highlight` or `done`: the reader's highlights for the item, the full current set, see below |
 | `capturedAt` | yes | ISO timestamp; orders capture vs remove |
 
 Files that are not valid JSON or lack `url`/`capturedAt` are skipped with a message and left in place.
+
+### Highlight event — `highlight`, or `done` with highlights
+
+Only the library page (`read-later-deliver`) produces highlights. They live in the page while reading and reach the agent as one JSON object holding the item's full current set. Today the reader copies that object from the page and pastes it into chat; later DAM's artifact bridge posts the same object itself. The agent's side is identical either way.
+
+```json
+{
+  "id": "2026-09-08T20-11-02-113Z-a8c1e",
+  "action": "done",
+  "source": "artifact",
+  "url": "https://uber.com/us/en/blog/efficient-software-factory",
+  "item": "2026-09-07T13-00-00Z-running-a-software-factory-efficiently-at-uber-scale",
+  "highlights": [
+    {
+      "id": "h-k3f9a2",
+      "exact": "70% of pull requests are merged within a day",
+      "prefix": "we found that ",
+      "suffix": ". The rest wait",
+      "start": 14210,
+      "end": 14254,
+      "note": "compare with ours",
+      "createdAt": "2026-09-08T20:03:11.000Z"
+    }
+  ],
+  "capturedAt": "2026-09-08T20:11:02.113Z"
+}
+```
+
+| field | meaning |
+|---|---|
+| `id` | chosen by the page, stable for the life of the highlight |
+| `exact`, `prefix`, `suffix` | the highlighted text and up to 32 characters around it: a W3C TextQuoteSelector, the anchor that survives re-rendering |
+| `start`, `end` | character offsets into the rendered article text: a W3C TextPositionSelector, the fast path and the tiebreaker when `exact` occurs twice |
+| `note` | optional, the reader's comment |
+| `createdAt` | when the highlight was made |
+
+The set is authoritative: ingest replaces `items/<folder>/highlights.json` with it (last write wins), so a highlight the reader deleted in the page disappears on the agent. A `highlight` event changes nothing else; `done` with highlights writes the file, then marks the item read. An empty `highlights` list clears the file's contents.
 
 ## Item — `items/<folder>/item.json`
 
@@ -85,6 +124,10 @@ The folder is `<first capture time>-<title slug>`, e.g. `2026-09-07T13-00-00Z-ru
 ```
 
 A failed analysis leaves `status` unchanged and adds `analysisError: {at, message}`; the next run retries it.
+
+## Highlights — `items/<folder>/highlights.json`
+
+Written by ingest from `highlight` and `done` events, never by hand: `{"updatedAt": "…", "highlights": [ …the same objects as in the event… ]}`. Absent until the reader highlights something. `read-later-deliver` injects it into the page, so highlights made on one device show on every device once the agent has them. The folder moves to `done/` with the file.
 
 ## Article — `items/<folder>/content.md`
 

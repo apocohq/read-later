@@ -5,8 +5,9 @@ Render the read-later library page: assets/template.html + data from the state d
     python3 scripts/render.py STATE_DIR
 
 Reads STATE_DIR/queue.json (order and buckets, from read-later-rank) and, for each
-entry, items/<folder>/item.json (analysis, metadata) and content.md (the article),
-injects everything as one JSON blob into the template, and writes STATE_DIR/queue.html.
+entry, items/<folder>/item.json (analysis, metadata), content.md (the article) and
+highlights.json (the reader's highlights, when any), injects everything as one JSON blob
+into the template, and writes STATE_DIR/queue.html.
 The template is the design; this script only supplies data. To restyle, edit the
 template (or drop a copy at STATE_DIR/template.html, which wins).
 
@@ -43,6 +44,12 @@ def entry(root: Path, e: dict, bucket: str) -> dict:
     item = json.loads((folder / "item.json").read_text()) if (folder / "item.json").exists() else {}
     a = item.get("analysis") or {}
     body = strip_frontmatter((folder / "content.md").read_text()) if (folder / "content.md").exists() else ""
+    highlights = []
+    if (folder / "highlights.json").exists():
+        try:
+            highlights = [h for h in json.loads((folder / "highlights.json").read_text()).get("highlights", []) if isinstance(h, dict)]
+        except (ValueError, AttributeError) as err:
+            print(f"warning: {folder.name}/highlights.json unreadable: {err}", file=sys.stderr)
     words = body.split()
     if len(words) > MAX_ARTICLE_WORDS:
         body = " ".join(words[:MAX_ARTICLE_WORDS]) + "\n\n*Truncated for the library page; open the original for the rest.*"
@@ -67,6 +74,7 @@ def entry(root: Path, e: dict, bucket: str) -> dict:
         "priority": e.get("priority"),
         "notes": e.get("notes", []),
         "markdown": body,
+        "highlights": highlights,
     }
 
 

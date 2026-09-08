@@ -16,12 +16,14 @@ Layout under STATE_DIR:
     inbox/<id>.json            one event per file, written by the Chrome extension
     items/<folder>/item.json   one folder per page: <capturedAt>-<title slug>
     items/<folder>/content.md  the article: short frontmatter + Markdown (with images)
+    items/<folder>/highlights.json  the reader's highlights, from the library page
     feedback.jsonl             append-only log (archive lines land here)
 
 Dedup key is the canonical `url` inside each item.json; there is no separate index.
 
 Events: `capture` (default) adds a page; `remove` retracts earlier captures of the same URL
-(drops unprocessed ones, archives a processed item); `done` marks a processed item as read.
+(drops unprocessed ones, archives a processed item); `done` marks a processed item as read;
+`highlight` replaces the item's highlights.json. `done` may carry highlights too.
 
 Inbox content is untrusted input. This script parses it; it never executes it.
 
@@ -67,8 +69,10 @@ def load_events(inbox: Path) -> list[dict]:
                 raise ValueError("missing url or capturedAt")
             ev.setdefault("action", "capture")
             ev.setdefault("source", "unknown")
-            if ev["action"] not in ("capture", "remove", "done"):
+            if ev["action"] not in ("capture", "remove", "done", "highlight"):
                 raise ValueError(f"unknown action {ev['action']!r}")
+            if "highlights" in ev and not isinstance(ev["highlights"], list):
+                raise ValueError("highlights must be a list")
             ev["_path"] = path
             events.append(ev)
         except Exception as e:  # noqa: BLE001
@@ -231,6 +235,13 @@ class Store:
         (d / "item.json").write_text(json.dumps(item, indent=2, ensure_ascii=False) + "\n")
         self.by_url[item["url"]] = folder
 
+    def save_highlights(self, folder: str, highlights: list[dict], at: str) -> int:
+        """Replace the item's highlights with the event's set. Keeps only known fields; the text is untrusted and stays a string."""
+        keep = ("id", "exact", "prefix", "suffix", "start", "end", "note", "createdAt")
+        clean = [{k: h[k] for k in keep if k in h} for h in highlights if isinstance(h, dict) and isinstance(h.get("exact"), str) and h["exact"].strip()]
+        (self.items / folder / "highlights.json").write_text(json.dumps({"updatedAt": at, "highlights": clean}, indent=2, ensure_ascii=False) + "\n")
+        return len(clean)
+
     def feedback(self, line: dict) -> None:
         with (self.root / "feedback.jsonl").open("a") as f:
             f.write(json.dumps(line) + "\n")
@@ -249,24 +260,30 @@ def capture_record(ev: dict) -> dict:
 # ---------- run ----------
 
 def apply_done(store: Store, events: list[dict]) -> list[dict]:
-    """`done` events mark an existing item as read. Returns the other events. A done for an unknown URL is dropped with a note."""
+    """`done` and `highlight` events act on an existing item: highlights replace highlights.json, done marks it read.
+    Returns the other events. An event for an unknown URL is dropped with a note."""
     rest = []
-    for ev in events:
-        if ev["action"] != "done":
+    for ev in sorted(events, key=lambda e: e["capturedAt"]):  # last highlight set wins
+        if ev["action"] not in ("done", "highlight"):
             rest.append(ev)
             continue
         canonical = canonicalize(ev["url"])
         found = store.get(canonical)
         if found and found[1]["status"] not in ("archived",):
             folder, item = found
-            if item["status"] != "done":
-                item["status"] = "done"
-                item["doneAt"] = ev["capturedAt"]
-                store.save(folder, item)
-                store.feedback({"item": folder, "action": "done", "reason": f"marked via {ev.get('source', '?')}", "at": now()})
-            print(f"done      items/{folder}", file=sys.stderr)
+            if "highlights" in ev:
+                n = store.save_highlights(folder, ev["highlights"], ev["capturedAt"])
+                store.feedback({"item": folder, "action": "highlight", "reason": f"{n} highlight(s) via {ev.get('source', '?')}", "at": now()})
+                print(f"highlight items/{folder}  {n} highlight(s)", file=sys.stderr)
+            if ev["action"] == "done":
+                if item["status"] != "done":
+                    item["status"] = "done"
+                    item["doneAt"] = ev["capturedAt"]
+                    store.save(folder, item)
+                    store.feedback({"item": folder, "action": "done", "reason": f"marked via {ev.get('source', '?')}", "at": now()})
+                print(f"done      items/{folder}", file=sys.stderr)
         else:
-            print(f"dropped   {ev['_path'].name}  done for an unknown or archived item  {canonical}", file=sys.stderr)
+            print(f"dropped   {ev['_path'].name}  {ev['action']} for an unknown or archived item  {canonical}", file=sys.stderr)
         ev["_path"].unlink(missing_ok=True)
     return rest
 
@@ -321,7 +338,7 @@ def main(argv: list[str]) -> int:
     events = load_events(store.inbox)
     if args.dry_run:
         for ev in events:
-            print(json.dumps({"id": ev.get("id", ev["_path"].stem), "action": ev["action"], "url": canonicalize(ev["url"]), "hasHtml": bool(ev.get("html"))}))
+            print(json.dumps({"id": ev.get("id", ev["_path"].stem), "action": ev["action"], "url": canonicalize(ev["url"]), "hasHtml": bool(ev.get("html")), "highlights": len(ev["highlights"]) if "highlights" in ev else None}))
         print(f"dry run: {len(events)} event(s), nothing written", file=sys.stderr)
         return 0
 

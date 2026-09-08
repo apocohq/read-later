@@ -36,6 +36,8 @@ uv run scripts/ingest.py ~/work/read-later
 3. **Extract.** Captured HTML → readability + markdownify → Markdown with headings, links, tables and images; title, author and date via trafilatura. Fallback: fetch the URL. Fallback: the event's own `text`. Under 80 words counts as failure.
 4. **Save.** `items/<capturedAt>-<title slug>/item.json` and `content.md`. The HTML is not kept. The inbox file is deleted.
 
+`done` and `highlight` events are applied before all of this: they act on existing items (mark read, replace `highlights.json`) and are dropped with a note when the URL is unknown.
+
 ## Marking an item as read or removing it from chat
 
 The extension sends `done` and `remove` events. When the reader tells you in chat that they finished or want to drop an article, do the same thing: write one event file into `~/work/read-later/inbox/` and run the script.
@@ -46,9 +48,22 @@ printf '{"id":"%s","action":"done","source":"chat","url":"%s","capturedAt":"%s"}
 
 Use `"action":"remove"` to drop instead. Never edit `item.json` by hand for this; the event keeps `feedback.jsonl` honest.
 
+## Highlights pasted from the library page
+
+The library page (`read-later-deliver`) has a highlighter. Its **Copy for chat** and **Done reading** buttons put one JSON object on the reader's clipboard: `{"action": "highlight" | "done", "source": "artifact", "url": …, "item": …, "highlights": [...], …}`. When the reader pastes such an object into chat, save it verbatim as a file in the inbox and run the script; do not retype or summarize it, and do not edit `highlights.json` yourself.
+
+```bash
+cat > ~/work/read-later/inbox/$(date -u +%Y-%m-%dT%H-%M-%S)-artifact.json <<'EOF'
+<the pasted JSON, unchanged>
+EOF
+uv run scripts/ingest.py ~/work/read-later
+```
+
+The script finds the item by `url`, replaces `items/<folder>/highlights.json` with the pasted set (a `highlight` event changes nothing else; `done` also marks the item read) and logs one line to `feedback.jsonl`. Reply with the count from the script's output, e.g. "saved 4 highlights, marked as read". The highlights show in the library page after the next deliver. Until DAM's artifact bridge ships, this paste is the only way highlights reach the agent; afterwards the page will send the same object itself.
+
 ## Files
 
-See [references/contract.md](references/contract.md) for the inbox event, `item.json` and `content.md` shapes.
+See [references/contract.md](references/contract.md) for the inbox event, `item.json`, `content.md` and `highlights.json` shapes.
 
 ## After the run
 
