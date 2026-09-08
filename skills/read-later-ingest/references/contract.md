@@ -71,7 +71,7 @@ Only the library page (`read-later-deliver`) produces highlights. They live in t
 | `note` | optional, the reader's comment |
 | `createdAt` | when the highlight was made |
 
-The set is authoritative: ingest replaces `items/<folder>/highlights.json` with it (last write wins), so a highlight the reader deleted in the page disappears on the agent. A `highlight` event changes nothing else; `done` with highlights writes the file, then marks the item read. An empty `highlights` list clears the file's contents.
+The set is authoritative: ingest replaces `items/<folder>/highlights.json` with it (last write wins), so a highlight the reader deleted in the page disappears on the agent. A `highlight` event changes nothing else; `done` with highlights writes the file, then marks the item read. An empty `highlights` list clears the file's contents; a `done` without the key leaves the file alone. The page omits the key when it knows of no highlights at all, so a "done" from a browser that never saw them cannot wipe what another device sent. A `highlight` event must carry the key or it is skipped.
 
 ## Item — `items/<folder>/item.json`
 

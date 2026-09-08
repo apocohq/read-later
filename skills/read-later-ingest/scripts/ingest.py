@@ -65,7 +65,7 @@ def load_events(inbox: Path) -> list[dict]:
     for path in sorted(inbox.glob("*.json")):
         try:
             ev = json.loads(path.read_text())
-            if not isinstance(ev, dict) or not ev.get("url") or not ev.get("capturedAt"):
+            if not isinstance(ev, dict) or not isinstance(ev.get("url"), str) or not ev["url"] or not isinstance(ev.get("capturedAt"), str) or not ev["capturedAt"]:
                 raise ValueError("missing url or capturedAt")
             ev.setdefault("action", "capture")
             ev.setdefault("source", "unknown")
@@ -73,6 +73,8 @@ def load_events(inbox: Path) -> list[dict]:
                 raise ValueError(f"unknown action {ev['action']!r}")
             if "highlights" in ev and not isinstance(ev["highlights"], list):
                 raise ValueError("highlights must be a list")
+            if ev["action"] == "highlight" and "highlights" not in ev:
+                raise ValueError("highlight event without highlights")
             ev["_path"] = path
             events.append(ev)
         except Exception as e:  # noqa: BLE001
@@ -204,19 +206,23 @@ class Store:
         self.items = root / "items"
         self.items.mkdir(parents=True, exist_ok=True)
         self.by_url: dict[str, str] = {}
-        for p in self.items.glob("*/item.json"):
-            try:
-                url = json.loads(p.read_text()).get("url")
-                if url:
-                    self.by_url[url] = p.parent.name
-            except Exception as e:  # noqa: BLE001
-                print(f"skip unreadable {p}: {e}", file=sys.stderr)
+        self.done_by_url: dict[str, str] = {}  # items prune already moved to done/; late highlights still land there
+        for index, base in ((self.by_url, self.items), (self.done_by_url, root / "done")):
+            for p in base.glob("*/item.json"):
+                try:
+                    url = json.loads(p.read_text()).get("url")
+                    if url:
+                        index[url] = p.parent.name
+                except Exception as e:  # noqa: BLE001
+                    print(f"skip unreadable {p}: {e}", file=sys.stderr)
 
-    def get(self, canonical: str) -> tuple[str, dict] | None:
-        folder = self.by_url.get(canonical)
-        if not folder:
-            return None
-        return folder, json.loads((self.items / folder / "item.json").read_text())
+    def get(self, canonical: str, include_done: bool = False) -> tuple[str, dict] | None:
+        """Returns (folder, item). The folder is relative to the state dir: `items/<f>`, or `done/<f>` when include_done finds it there."""
+        if folder := self.by_url.get(canonical):
+            return f"items/{folder}", json.loads((self.items / folder / "item.json").read_text())
+        if include_done and (folder := self.done_by_url.get(canonical)):
+            return f"done/{folder}", json.loads((self.root / "done" / folder / "item.json").read_text())
+        return None
 
     def new_folder(self, captured_at: str, title: str | None, canonical: str) -> str:
         base = folder_name(captured_at, title, canonical)
@@ -235,11 +241,17 @@ class Store:
         (d / "item.json").write_text(json.dumps(item, indent=2, ensure_ascii=False) + "\n")
         self.by_url[item["url"]] = folder
 
-    def save_highlights(self, folder: str, highlights: list[dict], at: str) -> int:
-        """Replace the item's highlights with the event's set. Keeps only known fields; the text is untrusted and stays a string."""
-        keep = ("id", "exact", "prefix", "suffix", "start", "end", "note", "createdAt")
-        clean = [{k: h[k] for k in keep if k in h} for h in highlights if isinstance(h, dict) and isinstance(h.get("exact"), str) and h["exact"].strip()]
-        (self.items / folder / "highlights.json").write_text(json.dumps({"updatedAt": at, "highlights": clean}, indent=2, ensure_ascii=False) + "\n")
+    def save_highlights(self, rel_folder: str, highlights: list[dict], at: str) -> int:
+        """Replace the item's highlights with the event's set. Keeps only known, well-typed fields; the text is untrusted and stays a string."""
+        strings, ints = ("id", "exact", "prefix", "suffix", "note", "createdAt"), ("start", "end")
+        clean = []
+        for h in highlights:
+            if not isinstance(h, dict) or not isinstance(h.get("id"), str) or not h["id"] or not isinstance(h.get("exact"), str) or not h["exact"].strip():
+                continue
+            rec = {k: h[k] for k in strings if isinstance(h.get(k), str) and h[k]}
+            rec.update({k: h[k] for k in ints if isinstance(h.get(k), int) and not isinstance(h[k], bool)})
+            clean.append(rec)
+        (self.root / rel_folder / "highlights.json").write_text(json.dumps({"updatedAt": at, "highlights": clean}, indent=2, ensure_ascii=False) + "\n")
         return len(clean)
 
     def feedback(self, line: dict) -> None:
@@ -268,22 +280,25 @@ def apply_done(store: Store, events: list[dict]) -> list[dict]:
             rest.append(ev)
             continue
         canonical = canonicalize(ev["url"])
-        found = store.get(canonical)
+        found = store.get(canonical, include_done=True)
         if found and found[1]["status"] not in ("archived",):
-            folder, item = found
+            rel, item = found
             if "highlights" in ev:
-                n = store.save_highlights(folder, ev["highlights"], ev["capturedAt"])
-                store.feedback({"item": folder, "action": "highlight", "reason": f"{n} highlight(s) via {ev.get('source', '?')}", "at": now()})
-                print(f"highlight items/{folder}  {n} highlight(s)", file=sys.stderr)
+                n = store.save_highlights(rel, ev["highlights"], ev["capturedAt"])
+                store.feedback({"item": rel.split("/", 1)[1], "action": "highlight", "reason": f"{n} highlight(s) via {ev.get('source', '?')}", "at": now()})
+                print(f"highlight {rel}  {n} highlight(s)", file=sys.stderr)
+                print(json.dumps({"item": rel, "action": "highlight", "highlights": n}))
             if ev["action"] == "done":
-                if item["status"] != "done":
+                if item["status"] != "done" and rel.startswith("items/"):
                     item["status"] = "done"
                     item["doneAt"] = ev["capturedAt"]
-                    store.save(folder, item)
-                    store.feedback({"item": folder, "action": "done", "reason": f"marked via {ev.get('source', '?')}", "at": now()})
-                print(f"done      items/{folder}", file=sys.stderr)
+                    store.save(rel.split("/", 1)[1], item)
+                    store.feedback({"item": rel.split("/", 1)[1], "action": "done", "reason": f"marked via {ev.get('source', '?')}", "at": now()})
+                print(f"done      {rel}", file=sys.stderr)
+                print(json.dumps({"item": rel, "action": "done"}))
         else:
             print(f"dropped   {ev['_path'].name}  {ev['action']} for an unknown or archived item  {canonical}", file=sys.stderr)
+            print(json.dumps({"action": ev["action"], "url": canonical, "dropped": "unknown or archived item"}))
         ev["_path"].unlink(missing_ok=True)
     return rest
 
@@ -306,7 +321,7 @@ def apply_removals(store: Store, events: list[dict]) -> dict[str, list[dict]]:
         if keep:
             survivors[canonical] = keep
         elif (found := store.get(canonical)) and found[1]["status"] != "archived":
-            folder, item = found
+            folder, item = found[0].split("/", 1)[1], found[1]
             item["status"] = "archived"
             store.save(folder, item)
             store.feedback({"item": folder, "action": "archive", "reason": f"removed via {group[-1].get('source', '?')}", "at": now()})
@@ -345,6 +360,8 @@ def main(argv: list[str]) -> int:
     ok = failed = 0
     for canonical, evs in apply_removals(store, apply_done(store, events)).items():
         found = store.get(canonical)
+        if found:
+            found = (found[0].split("/", 1)[1], found[1])  # bare folder name under items/
         item = found[1] if found else {"url": canonical, "title": first_title(evs), "status": "captured", "mustRead": False, "captures": []}
         if found or len(evs) > 1:
             print(f"merged    {len(evs)} capture(s) into {'existing' if found else 'new'} item  {canonical}", file=sys.stderr)

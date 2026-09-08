@@ -47,8 +47,13 @@ def entry(root: Path, e: dict, bucket: str) -> dict:
     highlights = []
     if (folder / "highlights.json").exists():
         try:
-            highlights = [h for h in json.loads((folder / "highlights.json").read_text()).get("highlights", []) if isinstance(h, dict)]
-        except (ValueError, AttributeError) as err:
+            doc = json.loads((folder / "highlights.json").read_text())
+            found = doc.get("highlights") if isinstance(doc, dict) else None
+            if isinstance(found, list):
+                highlights = [h for h in found if isinstance(h, dict) and isinstance(h.get("id"), str) and isinstance(h.get("exact"), str)]
+            else:
+                print(f"warning: {folder.name}/highlights.json has no highlights list; ignored", file=sys.stderr)
+        except (OSError, ValueError) as err:
             print(f"warning: {folder.name}/highlights.json unreadable: {err}", file=sys.stderr)
     words = body.split()
     if len(words) > MAX_ARTICLE_WORDS:

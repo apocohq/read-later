@@ -229,27 +229,35 @@ mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
     const CTX = 32;
     const key = id => 'rl:hl:' + id;
     let storageOk = true;
-    const load = it => { try { return JSON.parse(localStorage.getItem(key(it.id)) || 'null') || {added:[], deleted:[]}; } catch { storageOk = false; return {added:[], deleted:[]}; } };
+    const TOMBSTONE_MS = 30 * 24 * 3600 * 1000;
+    const cssEsc = v => (window.CSS && CSS.escape) ? CSS.escape(v) : String(v).replace(/["\\]/g, '\\$&');
+    // Stored shape: {added: [highlight], deleted: [{id, at}]}. Anything else (older revisions of this page, damage) is normalized away.
+    const normalize = v => ({
+      added: Array.isArray(v?.added) ? v.added.filter(h => h && typeof h.id === 'string' && typeof h.exact === 'string') : [],
+      deleted: Array.isArray(v?.deleted) ? v.deleted.map(d => typeof d === 'string' ? {id: d, at: Date.now()} : d).filter(d => d && typeof d.id === 'string') : [],
+    });
+    const load = it => { try { return normalize(JSON.parse(localStorage.getItem(key(it.id)) || 'null')); } catch { storageOk = false; return normalize(null); } };
     const save = (it, st) => { try { localStorage.setItem(key(it.id), JSON.stringify(st)); storageOk = true; } catch { storageOk = false; } };
     const synced = it => it.highlights || [];
-    // Reconcile with what the agent has: a local addition the agent now knows is synced; a local deletion the agent applied is over.
+    // Reconcile with what the agent has: a local addition the agent now knows is synced. A deletion stays until the agent no
+    // longer has the id (it may have been sent but not republished yet), and is forgotten after 30 days if it never shows up.
     function state(it){
-      const st = load(it), ids = new Set(synced(it).map(h => h.id));
-      const added = st.added.filter(h => !ids.has(h.id)), deleted = st.deleted.filter(id => ids.has(id));
+      const st = load(it), ids = new Set(synced(it).map(h => h.id)), cutoff = Date.now() - TOMBSTONE_MS;
+      const added = st.added.filter(h => !ids.has(h.id)), deleted = st.deleted.filter(d => ids.has(d.id) || (d.at || 0) > cutoff);
       if (added.length !== st.added.length || deleted.length !== st.deleted.length) save(it, {added, deleted});
       return {added, deleted};
     }
     function current(it){
-      const st = state(it), gone = new Set(st.deleted);
+      const st = state(it), gone = new Set(st.deleted.map(d => d.id));
       return [...synced(it).filter(h => !gone.has(h.id)), ...st.added].sort((a,b) => (a.start ?? 0) - (b.start ?? 0));
     }
     const isLocal = (it, id) => !synced(it).some(h => h.id === id);
     function add(it, h){ const st = state(it); st.added.push(h); save(it, st); }
-    function remove(it, id){ const st = state(it); st.added = st.added.filter(h => h.id !== id); if (!isLocal(it, id) && !st.deleted.includes(id)) st.deleted.push(id); save(it, st); }
+    function remove(it, id){ const st = state(it); st.added = st.added.filter(h => h.id !== id); if (!st.deleted.some(d => d.id === id)) st.deleted.push({id, at: Date.now()}); save(it, st); }
     function setNote(it, id, note){
       const st = state(it); const mine = st.added.find(h => h.id === id);
       if (mine){ if (note) mine.note = note; else delete mine.note; }
-      else { const src = synced(it).find(h => h.id === id); if (!src) return; const copy = {...src}; if (note) copy.note = note; else delete copy.note; st.added.push(copy); if (!st.deleted.includes(id)) st.deleted.push(id); copy.id = newId('h'); }
+      else { const src = synced(it).find(h => h.id === id); if (!src) return; const copy = {...src, id: newId('h')}; if (note) copy.note = note; else delete copy.note; st.added.push(copy); if (!st.deleted.some(d => d.id === id)) st.deleted.push({id, at: Date.now()}); }
       save(it, st);
     }
     const newId = (p='h') => p + '-' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-3);
@@ -283,21 +291,32 @@ mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
         const m = mk(); node.parentNode.insertBefore(m, node); m.appendChild(node);
       }
     }
-    function apply(root, it){
-      const text = root.textContent, orphans = [];
-      for (const h of current(it)){
-        const at = locate(text, h); if (at < 0){ orphans.push(h.id); continue; }
-        wrap(root, at, at + h.exact.length, () => { const m = document.createElement('mark'); m.className = 'hl' + (isLocal(it, h.id) ? ' local' : '') + (h.note ? ' noted' : ''); m.dataset.id = h.id; if (h.note) m.title = h.note; return m; });
-      }
-      return orphans;
+    function decorate(m, it, h){ m.className = 'hl' + (isLocal(it, h.id) ? ' local' : '') + (h.note ? ' noted' : ''); m.dataset.id = h.id; if (h.note) m.title = h.note; else m.removeAttribute('title'); return m; }
+    // Marks add no text, so offsets into root.textContent stay valid with other highlights already in place.
+    function applyOne(root, it, h){
+      const at = locate(root.textContent, h); if (at < 0) return false;
+      wrap(root, at, at + h.exact.length, () => decorate(document.createElement('mark'), it, h));
+      return true;
     }
+    function apply(root, it){ return current(it).filter(h => !applyOne(root, it, h)).map(h => h.id); }
+    function unwrap(root, id){
+      for (const m of root.querySelectorAll(`mark.hl[data-id="${cssEsc(id)}"]`)){ const parent = m.parentNode; while (m.firstChild) parent.insertBefore(m.firstChild, m); m.remove(); parent.normalize(); }
+    }
+    function restyle(root, it, id){ const h = current(it).find(x => x.id === id); root.querySelectorAll(`mark.hl[data-id="${cssEsc(id)}"]`).forEach(m => h && decorate(m, it, h)); }
     // --- outbox: one JSON object per send; today the clipboard, later DAM's artifact bridge ---
-    const event = (it, action) => ({ id: new Date().toISOString().replace(/[:.]/g,'-') + '-' + Math.random().toString(36).slice(2,7), action, source: 'artifact', url: it.url, item: it.id, title: it.title, highlights: current(it).map(({id, exact, prefix, suffix, start, end, note, createdAt}) => ({id, exact, prefix, suffix, start, end, ...(note ? {note} : {}), createdAt})), capturedAt: new Date().toISOString() });
+    const event = (it, action) => {
+      const ev = { id: new Date().toISOString().replace(/[:.]/g,'-') + '-' + Math.random().toString(36).slice(2,7), action, source: 'artifact', url: it.url, item: it.id, title: it.title, capturedAt: new Date().toISOString() };
+      const list = current(it);
+      // An empty set is sent only when this page knew of synced highlights (the reader deleted them). A page that never saw any
+      // says nothing about highlights, so a "done" from a stale browser cannot wipe what another device sent.
+      if (list.length || synced(it).length) ev.highlights = list.map(({id, exact, prefix, suffix, start, end, note, createdAt}) => ({id, exact, prefix, suffix, start, end, ...(note ? {note} : {}), createdAt}));
+      return ev;
+    };
     const transports = [
       async (ev, ui) => { const text = JSON.stringify(ev, null, 2); try { await navigator.clipboard.writeText(text); ui.toast(ev.action === 'done' ? 'Copied. Paste it to your agent to finish this article.' : 'Copied. Paste it to your agent.'); } catch { ui.fallback(text); } return true; },
     ];
     async function emit(it, action, ui){ const ev = event(it, action); for (const t of transports) if (await t(ev, ui)) return ev; return null; }
-    return { current, isLocal, add, remove, setNote, fromSelection, apply, emit, storageOk: () => storageOk };
+    return { current, isLocal, add, remove, setNote, fromSelection, apply, applyOne, unwrap, restyle, emit, cssEsc, storageOk: () => storageOk };
   })();
 
   const toastEl = document.getElementById('toast'); let toastTimer;
@@ -364,17 +383,18 @@ mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       panel.querySelector('#hl-toggle').addEventListener('click', () => { hlOn = !hlOn; closePop(); renderPanel(); article.classList.toggle('hl-on', hlOn); });
       panel.querySelector('#hl-copy').addEventListener('click', () => HL.emit(it, 'highlight', ui));
       panel.querySelector('#hl-done').addEventListener('click', () => HL.emit(it, 'done', ui));
-      panel.querySelectorAll('.q').forEach(q => q.addEventListener('click', () => { const m = article.querySelector(`mark.hl[data-id="${q.dataset.id}"]`); if (!m) return; m.scrollIntoView({block:'center', behavior:'smooth'}); m.classList.add('flash'); setTimeout(() => m.classList.remove('flash'), 1200); }));
-      panel.querySelectorAll('.x').forEach(x => x.addEventListener('click', () => { HL.remove(it, x.dataset.id); refresh(); }));
+      panel.querySelectorAll('.q').forEach(q => q.addEventListener('click', () => { const m = article.querySelector(`mark.hl[data-id="${HL.cssEsc(q.dataset.id)}"]`); if (!m) return; m.scrollIntoView({block:'center', behavior:'smooth'}); m.classList.add('flash'); setTimeout(() => m.classList.remove('flash'), 1200); }));
+      panel.querySelectorAll('.x').forEach(x => x.addEventListener('click', () => removeOne(x.dataset.id)));
     }
     const ui = {
       toast,
       fallback(text){ const box = panel.querySelector('#copybox'); box.hidden = false; box.innerHTML = '<p class="hint">Clipboard unavailable here. Select all and copy, then paste it to your agent.</p><textarea readonly></textarea>'; const ta = box.querySelector('textarea'); ta.value = text; ta.focus(); ta.select(); },
     };
-    function refresh(){ closePop(); renderArticle(); renderPanel(); }
+    // Single-highlight changes touch only their marks; the article is parsed once per open, so images and scroll position stay put.
+    function removeOne(id){ closePop(); HL.remove(it, id); HL.unwrap(article, id); orphans = orphans.filter(o => o !== id); renderPanel(); }
     article.addEventListener('pointerup', () => {
       if (!hlOn) return;
-      setTimeout(() => { const h = HL.fromSelection(article); if (!h) return; HL.add(it, h); window.getSelection()?.removeAllRanges(); refresh(); }, 0);
+      setTimeout(() => { const h = HL.fromSelection(article); if (!h) return; HL.add(it, h); window.getSelection()?.removeAllRanges(); closePop(); if (!HL.applyOne(article, it, h)) orphans.push(h.id); renderPanel(); }, 0);
     });
     article.addEventListener('click', e => {
       const m = e.target.closest('mark.hl'); if (!m) return;
@@ -386,14 +406,19 @@ mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       const r = m.getBoundingClientRect(), pr = pane.getBoundingClientRect();
       pop.style.top = (r.bottom - pr.top + pane.scrollTop + 6) + 'px'; pop.style.left = Math.max(12, Math.min(r.left - pr.left, pr.width - pop.offsetWidth - 12)) + 'px';
       const input = pop.querySelector('input'); input.focus();
-      const saveNote = () => { HL.setNote(it, h.id, input.value.trim()); refresh(); };
+      const saveNote = () => {
+        const before = new Set(HL.current(it).map(x => x.id)); HL.setNote(it, h.id, input.value.trim()); closePop();
+        const after = HL.current(it); const fresh = after.find(x => !before.has(x.id));
+        if (fresh){ HL.unwrap(article, h.id); if (!HL.applyOne(article, it, fresh)) orphans.push(fresh.id); } else HL.restyle(article, it, h.id);
+        renderPanel();
+      };
       pop.querySelector('[data-a="save"]').addEventListener('click', saveNote);
       input.addEventListener('keydown', ev => { if (ev.key === 'Enter') saveNote(); if (ev.key === 'Escape'){ ev.stopPropagation(); closePop(); } });
-      pop.querySelector('[data-a="remove"]').addEventListener('click', () => { HL.remove(it, h.id); refresh(); });
+      pop.querySelector('[data-a="remove"]').addEventListener('click', () => removeOne(h.id));
     });
-    pane.addEventListener('pointerdown', e => { if (pop && !pop.contains(e.target) && !e.target.closest('mark.hl')) closePop(); });
     renderArticle(); renderPanel();
   }
+  pane.addEventListener('pointerdown', e => { if (pop && !pop.contains(e.target) && !e.target.closest('mark.hl')) closePop(); });
   reader.addEventListener('click', e => { if (e.target === reader) close(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && reader.classList.contains('open')) close(); });
 
