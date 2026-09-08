@@ -99,6 +99,8 @@ Known gaps from that run: the analyzer put KubeStellar under `ai-and-agents` whe
 
 **Library page verified (2026-09-08):** after the redesign, a refresh on the test agent published version 2 of the same artifact (67 KB, `text/html`, three articles with full text). The two refreshes after it reported `changed: false` and did not republish. A second design pass (segmented 0-10 bars with the value beside them, no topic line under tiles, no footnote, Tonight holds three picks) went out as version 3.
 
+**Second rehearsal (2026-09-08, `read-later-test2`):** a brand-new agent set up by following INSTALL.md again, this time with only the doc's chat phrase, *"ingest, analyze, rank and deliver read later"*, as the run's instruction. It passed: 3 ingested, 3 analyzed, 3 ranked, artifact created (version 1), report and stop. The skills carry the run without a detailed prompt. Two findings: `dam skill source add` errors when the source is already registered (documented), and a temporary `--every 10m` trigger keeps running until deleted, each tick a short agent turn that ends in "unchanged" (a note for testers, not for INSTALL.md).
+
 ## Where things stand
 
 - Steps 1-5 work end to end on two agents: `first-reader` (your bookmarks) and `read-later-test` (the INSTALL.md rehearsal). Both run `read-later-refresh` at 18:00 Prague and `read-later-prune` on Sundays.
