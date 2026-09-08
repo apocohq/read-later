@@ -85,11 +85,9 @@ Then open `~/work/read-later/topics.md`, set a first pass of weights (0-10) for 
 dam schedule create <agent> --name read-later-daily --daily 18:00 --timezone Europe/Prague --session-mode fresh \
   --task 'Read-later daily run. State dir ~/work/read-later. Use the installed skills in this order, and only these: read-later-ingest, read-later-analyze (pass only the model connection), read-later-rank (reweigh from context.md first), read-later-deliver. Report each script output briefly and the artifact link. Do not open articles.'
 
-dam schedule create <agent> --name read-later-prune --weekly SU --daily 09:00 --timezone Europe/Prague --session-mode fresh \
+dam schedule create <agent> --name read-later-prune --daily 09:00 --weekdays SU --timezone Europe/Prague --session-mode fresh \
   --task 'Read-later weekly prune. State dir ~/work/read-later. Use skill read-later-prune: run its script, then tidy topics.md as the skill describes. Report what moved and what changed in the vocabulary.'
 ```
-
-If `--weekly` is not accepted by your CLI version, use `--daily 09:00 --weekdays SU`.
 
 The daily run at 18:00 means everything saved during the day is in that evening's queue. Adjust the hour to your reading time.
 
