@@ -67,6 +67,8 @@ def entry(root: Path, e: dict, bucket: str) -> dict:
         "published": item.get("published"),
         "words": item.get("words"),
         "minutes": e.get("minutes"),
+        "kind": item.get("kind"),
+        "durationSeconds": item.get("durationSeconds"),
         "mustRead": bool(item.get("mustRead")),
         "category": a.get("category"),
         "contentType": a.get("contentType"),

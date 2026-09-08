@@ -67,10 +67,12 @@ The folder is `<first capture time>-<title slug>`, e.g. `2026-09-07T13-00-00Z-ru
 | | A new `capture` of a `done` item reopens it: status back to `analyzed` (or `extracted` if never analyzed), `doneAt` removed, a `reopen` line in `feedback.jsonl` |
 | `mustRead` | true once any capture said so; never reset |
 | `captures[]` | one per capture: `at`, `source`, and only the user's signals if present: `note`, `selectedText`, `recommendedBy`, `sourceRef` |
-| `author`, `published` | when found. `published` is heuristic; treat as approximate |
-| `words`, `images` | size of the extracted article. `images` is 0 for PDFs, whose figures are not extracted |
+| `author`, `published` | when found. `published` is heuristic; treat as approximate. For a video or podcast, `author` is the channel or show |
+| `words`, `images` | size of the extracted article; for a video or podcast, the size of its description. `images` is 0 for PDFs, whose figures are not extracted |
 | `pages` | PDFs only: page count |
-| `extractedBy` | `capture` (browser HTML), `fetch` (agent fetched the URL), `fetch-pdf` (agent fetched a PDF), `capture-text` (producer's text) |
+| `kind` | `video` or `podcast`, only on media items (absent means article). From the page's Open Graph type (`video.*`, `music.*`) or JSON-LD (`VideoObject`, `PodcastEpisode`) |
+| `durationSeconds`, `image` | play time and cover image, when the page declares them; media items only |
+| `extractedBy` | `capture` (browser HTML), `fetch` (agent fetched the URL), `fetch-pdf` (agent fetched a PDF), `capture-text` (producer's text), `metadata` (video or podcast page: no article, only what the page declares) |
 | `extractedAt` | when |
 
 `read-later-analyze` adds `analysis` and sets `status: "analyzed"`:
@@ -80,7 +82,7 @@ The folder is `<first capture time>-<title slug>`, e.g. `2026-09-07T13-00-00Z-ru
   "version": "2", "at": "…", "template": "claude-code", "connection": "ibm-litellm",
   "tldr": "2-4 sentences stating the claim",
   "keyClaims": ["…", "…"],
-  "contentType": "article",
+  "contentType": "article",   // or paper, news, …, video, podcast, not-an-article
   "category": "ai-and-agents",
   "topics": ["agent-cost", "mcp", "subagents"],
   "hardWon":  { "score": 9, "reason": "one sentence" },
@@ -130,7 +132,7 @@ Produced by the library page (`read-later-deliver`), not by ingest. The page kee
 
 ## Article — `items/<folder>/content.md`
 
-Short frontmatter (`title`, `url`, `author`, `published`, when known), a blank line, then Markdown with headings, links, tables and images (absolute URLs). The full metadata lives in `item.json`.
+Short frontmatter (`title`, `url`, `author`, `published`, when known), a blank line, then Markdown with headings, links, tables and images (absolute URLs). The full metadata lives in `item.json`. For a video or podcast the body is the publisher's description, which may be short or empty; there is no transcript.
 
 For a PDF the Markdown comes from PyMuPDF's layout analysis: headings by level, paragraphs joined across lines and pages, tables as pipe tables, running heads and page numbers dropped, no images, no OCR (a scanned PDF fails with too few words). Title, author and date come from the PDF's landing page when the host has one (arXiv's abstract page, via `citation_*` meta tags), else from the first heading and the PDF's own metadata.
 

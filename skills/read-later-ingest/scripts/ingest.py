@@ -19,6 +19,10 @@ Layout under STATE_DIR:
     items/<folder>/content.md  the article: short frontmatter + Markdown (with images)
     feedback.jsonl             append-only log (archive lines land here)
 
+Video and podcast pages (Open Graph type video.* or music.*, or a VideoObject/PodcastEpisode in
+JSON-LD) have no article to extract. They become items with `kind`, `durationSeconds`, `image`
+and the publisher's description as content.md, and skip the minimum-words check.
+
 Dedup key is the canonical `url` inside each item.json; there is no separate index.
 
 Events: `capture` (default) adds a page; `remove` retracts earlier captures of the same URL
@@ -57,7 +61,7 @@ MIN_WORDS = 80
 FETCH_TIMEOUT = 20
 FETCH_MAX = 40_000_000  # a paper with figures runs to tens of MB
 USER_AGENT = "Mozilla/5.0 (compatible; read-later/0.2)"
-TRACKING = re.compile(r"^(utm_|fbclid$|gclid$|mc_|ref$|source$|si$)")
+TRACKING = re.compile(r"^(utm_|fbclid$|gclid$|mc_|ref$|source$|si$|nd$|dlsi$)")  # si/nd/dlsi: Spotify share and app-handoff params
 SLUG_MAX = 60
 RETRY_MAX = 3
 RETRY_AFTER_HOURS = 20
@@ -280,7 +284,7 @@ def fetch_and_extract(url: str) -> dict | None:
         return None
     kind, body = fetched
     if kind == "html":
-        return extract(body, url, "fetch")
+        return media(body, url) or extract(body, url, "fetch")
     if content := extract_pdf(body, "fetch-pdf"):
         if (landing := landing_page(url)) and (page := fetch(landing)) and page[0] == "html":
             content.update(citation_meta(page[1]))  # the abstract page knows the paper better than the PDF's own metadata
@@ -288,9 +292,96 @@ def fetch_and_extract(url: str) -> dict | None:
     return None
 
 
+# ---------- video and podcast pages ----------
+
+def ld_nodes(tree) -> list[dict]:
+    """Every JSON-LD object on the page, flattened (lists and @graph), dicts only."""
+    nodes = []
+    for raw in tree.xpath('//script[@type="application/ld+json"]/text()'):
+        try:
+            data = json.loads(raw)
+        except Exception:  # noqa: BLE001
+            continue
+        for node in data if isinstance(data, list) else [data]:
+            if isinstance(node, dict):
+                nodes += [n for n in node.get("@graph", [node]) if isinstance(n, dict)]
+    return nodes
+
+
+def parse_duration(value) -> int | None:
+    """Seconds from an ISO 8601 duration (PT1H2M3S), a plain number of seconds, or nothing."""
+    s = str(value or "").strip()
+    if s.isdigit():
+        return int(s)
+    m = re.fullmatch(r"P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", s)
+    if not m or not any(m.groups()):
+        return None
+    d, h, mi, sec = (int(x or 0) for x in m.groups())
+    return d * 86400 + h * 3600 + mi * 60 + sec
+
+
+def youtube_description(html: str) -> str | None:
+    """YouTube truncates its meta description; the full one is in the player response the page embeds."""
+    start = html.find("ytInitialPlayerResponse = ")
+    if start == -1:
+        return None
+    try:
+        obj, _ = json.JSONDecoder().raw_decode(html[start + len("ytInitialPlayerResponse = "):])
+        desc = obj.get("videoDetails", {}).get("shortDescription")
+        return desc if isinstance(desc, str) else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def media(html: str, url: str) -> dict | None:
+    """A video or podcast page has no article to extract, so keep what the page declares about itself:
+    title, description, duration, channel or show, date, cover image. Kind comes from the Open Graph
+    type (video.* → video, music.* → podcast; Spotify labels episodes music.song) or from JSON-LD."""
+    try:
+        tree = lxml_html.fromstring(html)
+    except Exception:  # noqa: BLE001
+        return None
+    ld = ld_nodes(tree)
+    types = {str(n.get("@type", "")).lower() for n in ld}
+    og_type = "".join(tree.xpath('//meta[@property="og:type"]/@content')[:1]).lower()
+    if og_type.startswith("video") or "videoobject" in types:
+        kind = "video"
+    elif og_type.startswith("music") or types & {"podcastepisode", "audioobject"}:
+        kind = "podcast"
+    else:
+        return None
+
+    def meta(*names: str) -> list[str]:
+        return [v.strip() for n in names for v in tree.xpath(f'//meta[@property="{n}" or @name="{n}" or @itemprop="{n}"]/@content') if v.strip()]
+
+    def first(*values):
+        return next((v for v in values if v), None)
+
+    descriptions = meta("description", "og:description", "twitter:description") + [n.get("description") for n in ld] + [youtube_description(html)]
+    description = max((d for d in descriptions if isinstance(d, str)), key=len, default="")
+    description = re.sub(r"^Listen to this episode from .+? on Spotify\.\s*", "", description).strip()
+    show = next((d.split(" · ")[0] for d in meta("og:description") if " · " in d and len(d) < 80), None)  # Spotify: "Show name · Episode"
+    series = [n["partOfSeries"].get("name") for n in ld if isinstance(n.get("partOfSeries"), dict)]
+    published = first(*meta("music:release_date", "uploadDate", "datePublished", "video:release_date", "article:published_time"),
+                      *[n.get("datePublished") or n.get("uploadDate") for n in ld])
+    return {
+        "title": first(*meta("og:title"), *[n.get("name") for n in ld], *tree.xpath("//title/text()")),
+        "author": first(*tree.xpath('//*[@itemprop="author"]//*[@itemprop="name"]/@content'), *series, declared_author(html), show),
+        "published": published[:10] if published and re.match(r"\d{4}-\d{2}-\d{2}", published) else None,
+        "kind": kind,
+        "durationSeconds": first(*(parse_duration(v) for v in meta("music:duration", "duration", "og:video:duration", "video:duration") + [n.get("duration") for n in ld])),
+        "image": first(*meta("og:image")),
+        "words": len(description.split()),
+        "images": 0,
+        "extractedBy": "metadata",
+        "extractedAt": now(),
+        "markdown": description,
+    }
+
+
 def acquire(url: str, events: list[dict]) -> dict | None:
     for ev in reversed(events):
-        if ev.get("html") and (content := extract(ev["html"], url, "capture")):
+        if ev.get("html") and (content := media(ev["html"], url) or extract(ev["html"], url, "capture")):
             return content
     if content := fetch_and_extract(url):
         return content

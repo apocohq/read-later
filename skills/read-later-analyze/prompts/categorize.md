@@ -1,6 +1,6 @@
 # Content type, category, topics
 
-`contentType`, one of: `article`, `paper`, `announcement`, `news`, `tutorial`, `opinion`, `reference`, `thread`, `transcript`, `not-an-article`.
+`contentType`, one of: `article`, `paper`, `announcement`, `news`, `tutorial`, `opinion`, `reference`, `thread`, `transcript`, `video`, `podcast`, `not-an-article`.
 
 `category`: exactly one from the CATEGORIES list in the vocabulary below. It is the shelf the reader would file this under, chosen by the reader's angle, not the author's: a piece about AI agents whose real lesson is how to run a team goes under `leadership`.
 

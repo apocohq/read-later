@@ -1,6 +1,6 @@
 # read-later
 
-Bookmark a page in Chrome, and a DAM agent turns it into a clean article, scores it, and shelves it in a small ranked library you read from one page.
+Bookmark a page in Chrome, and a DAM agent turns it into a clean article, scores it, and shelves it in a small ranked library you read from one page. Videos and podcast episodes are shelved too, from what their page declares (title, show, duration, description); transcripts are not fetched.
 
 ```
 Chrome extension ─▶ inbox/<id>.json ─▶ ingest ─▶ items/ ─▶ analyze ─▶ rank ─▶ queue ─▶ deliver ─▶ one artifact
