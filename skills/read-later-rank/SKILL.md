@@ -12,7 +12,7 @@ Turns analyzed items into a short queue. Relevance comes from the reader's **top
 
 ## Available scripts
 
-- **`scripts/rank.py`** — writes `queue.md` and `queue.json` into the state dir and prints the queue. `--help` for flags, `--json` for the machine-readable form.
+- **`scripts/rank.py`** — writes `queue.json` (order, buckets, priority, relevance) into the state dir and prints a short text view. `--help` for flags, `--json` to print the JSON instead.
 
 ## Run
 
@@ -40,5 +40,5 @@ Report: which weights you changed and why (one line each, or "no context, weight
 
 ## Rules
 
-- `queue.md` and `queue.json` are generated; fix the weights or the script, never the files.
+- `queue.json` is generated; fix the weights or the script, never the file.
 - The scores in `item.json` are the analyzer's; rank does not rewrite them.

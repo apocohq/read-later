@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
 """
-Render queue.json into a self-contained queue.html for the artifact library.
+Render the read-later library page: assets/template.html + data from the state dir.
 
-    python3 scripts/render.py [--json] STATE_DIR
+    python3 scripts/render.py STATE_DIR
 
-Reads STATE_DIR/queue.json (from read-later-rank), writes STATE_DIR/queue.html,
-and records the content hash in STATE_DIR/deliver.json. Prints one JSON object:
-{"html": "<path>", "changed": true|false, "artifactId": "<id or null>"}.
-`changed` is false when the rendered page is byte-identical to the last one
-recorded, so the agent can skip publishing a new artifact version.
+Reads STATE_DIR/queue.json (order and buckets, from read-later-rank) and, for each
+entry, items/<folder>/item.json (analysis, metadata) and content.md (the article),
+injects everything as one JSON blob into the template, and writes STATE_DIR/queue.html.
+The template is the design; this script only supplies data. To restyle, edit the
+template (or drop a copy at STATE_DIR/template.html, which wins).
+
+Records the data's hash in STATE_DIR/deliver.json and prints one JSON object:
+{"html": "<path>", "changed": true|false, "artifactId": "<id or null>", "items": N}.
+`changed` is false when the data is identical to the last publish, so the agent
+can skip publishing a new artifact version.
 
 Exit codes: 0 ran, 2 bad arguments, 3 STATE_DIR or queue.json missing.
 """
@@ -16,64 +21,57 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import html
 import json
 import sys
 from pathlib import Path
 
-BUCKETS = (("read_today", "Read today"), ("read_next", "Read next"), ("later", "Later"))
-
-CSS = """
-:root{--bg:#f6f5f2;--ink:#1e2126;--muted:#6b7078;--line:#dcd9d2;--card:#fff;--accent:#1d6f76}
-@media (prefers-color-scheme:dark){:root{--bg:#14171b;--ink:#e6e8ea;--muted:#8d949c;--line:#2c3238;--card:#1b2026;--accent:#5cb8be}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,"Segoe UI",Helvetica,Arial,sans-serif}
-main{max-width:760px;margin:0 auto;padding:40px 20px 80px}h1{font-size:22px;margin:0 0 4px}.sub{color:var(--muted);font-size:13px;margin-bottom:32px}
-h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:32px 0 12px}
-.item{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px 18px;margin-bottom:12px}
-.item.today{border-color:var(--accent)}.item h3{margin:0 0 6px;font-size:17px;line-height:1.3}.item h3 a{color:var(--ink);text-decoration:none}.item h3 a:hover{text-decoration:underline}
-.meta{color:var(--muted);font-size:12.5px;margin-bottom:10px}.meta b{color:var(--ink);font-weight:500}.tldr{margin:0 0 10px}
-.claims{margin:0 0 10px 18px;padding:0;font-size:14px;color:var(--ink)}.claims li{margin:2px 0}
-.why{font-size:12.5px;color:var(--muted)}.why span{display:inline-block;margin-right:12px}.tag{display:inline-block;font-size:11.5px;padding:1px 7px;border:1px solid var(--line);border-radius:10px;margin:0 4px 4px 0;color:var(--muted)}
-.empty{color:var(--muted);font-style:italic}details{margin-top:8px}summary{cursor:pointer;color:var(--muted);font-size:13px}
-"""
+SKILL_DIR = Path(__file__).resolve().parent.parent
+BUCKETS = ("read_today", "read_next", "later")
+MAX_ARTICLE_WORDS = 12000  # keep the page well under the artifact size cap
 
 
-def esc(s: object) -> str:
-    return html.escape(str(s if s is not None else ""), quote=True)
+def strip_frontmatter(md: str) -> str:
+    if md.startswith("---\n"):
+        end = md.find("\n---\n", 4)
+        if end != -1:
+            return md[end + 5 :]
+    return md
 
 
-def entry_html(e: dict, today: bool) -> str:
-    tags = "".join(f'<span class="tag">{esc(t)}</span>' for t in e.get("topics", []))
-    claims = "".join(f"<li>{esc(c)}</li>" for c in e.get("keyClaims", []))
-    notes = " ".join(f"<span>{esc(n)}</span>" for n in e.get("notes", []))
-    return f"""<article class="item{' today' if today else ''}">
-<h3><a href="{esc(e['url'])}" target="_blank" rel="noopener">{esc(e.get('title') or e['url'])}</a></h3>
-<div class="meta"><b>{esc(e.get('minutes'))} min</b> · {esc(e.get('category'))}{' · ' + esc(e['contentType']) if e.get('contentType') else ''}</div>
-<p class="tldr">{esc(e.get('tldr'))}</p>
-{f'<ul class="claims">{claims}</ul>' if claims else ''}
-<div class="why"><span>relevance {esc(e.get('relevance'))}</span><span>hard-won {esc(e.get('hardWon'))}</span><span>grounded {esc(e.get('grounded'))}</span>{notes}</div>
-<div style="margin-top:8px">{tags}</div>
-</article>"""
-
-
-def render(queue: dict) -> str:
-    parts = [f"<title>Read later</title><style>{CSS}</style><main><h1>Read later</h1><div class=\"sub\">Generated {esc(queue.get('generatedAt', ''))}. One to read tonight, a few for the week, the rest can wait.</div>"]
-    for key, title in BUCKETS:
-        entries = queue.get("buckets", {}).get(key, [])
-        parts.append(f"<h2>{title} · {len(entries)}</h2>")
-        if not entries:
-            parts.append('<p class="empty">Nothing.</p>')
-            continue
-        if key == "later" and len(entries) > 5:
-            parts.append(f"<details><summary>{len(entries)} items</summary>" + "".join(entry_html(e, False) for e in entries) + "</details>")
-        else:
-            parts.extend(entry_html(e, key == "read_today") for e in entries)
-    parts.append("</main>")
-    return "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" + "\n".join(parts) + "</html>\n"
+def entry(root: Path, e: dict, bucket: str) -> dict:
+    folder = root / e["item"]
+    item = json.loads((folder / "item.json").read_text()) if (folder / "item.json").exists() else {}
+    a = item.get("analysis") or {}
+    body = strip_frontmatter((folder / "content.md").read_text()) if (folder / "content.md").exists() else ""
+    words = body.split()
+    if len(words) > MAX_ARTICLE_WORDS:
+        body = " ".join(words[:MAX_ARTICLE_WORDS]) + "\n\n*Truncated for the library page; open the original for the rest.*"
+    return {
+        "id": Path(e["item"]).name,
+        "bucket": bucket,
+        "title": e.get("title") or item.get("title") or e.get("url"),
+        "url": e.get("url") or item.get("url"),
+        "author": item.get("author"),
+        "published": item.get("published"),
+        "words": item.get("words"),
+        "minutes": e.get("minutes"),
+        "mustRead": bool(item.get("mustRead")),
+        "category": a.get("category"),
+        "contentType": a.get("contentType"),
+        "topics": a.get("topics", []),
+        "tldr": a.get("tldr"),
+        "keyClaims": a.get("keyClaims", []),
+        "hardWon": a.get("hardWon"),
+        "grounded": a.get("grounded"),
+        "relevance": e.get("relevance"),
+        "priority": e.get("priority"),
+        "notes": e.get("notes", []),
+        "markdown": body,
+    }
 
 
 def main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(prog="render.py", description="Render queue.json into a self-contained queue.html; report whether it changed since the last publish.")
+    ap = argparse.ArgumentParser(prog="render.py", description="Render the read-later library page from the template and the state dir; report whether it changed.")
     ap.add_argument("state_dir", metavar="STATE_DIR")
     args = ap.parse_args(argv)
     root = Path(args.state_dir).expanduser().resolve()
@@ -82,26 +80,26 @@ def main(argv: list[str]) -> int:
         print(f"error: {qpath} missing. Run read-later-rank first.", file=sys.stderr)
         return 3
     queue = json.loads(qpath.read_text())
-    # enrich entries with the analysis fields render needs
-    for key, _ in BUCKETS:
-        for e in queue.get("buckets", {}).get(key, []):
-            ip = root / e["item"] / "item.json"
-            if ip.exists():
-                a = json.loads(ip.read_text()).get("analysis", {})
-                e.setdefault("keyClaims", a.get("keyClaims", []))
-                e.setdefault("contentType", a.get("contentType"))
-                e.setdefault("hardWon", (a.get("hardWon") or {}).get("score"))
-                e.setdefault("grounded", (a.get("grounded") or {}).get("score"))
-    page = render(queue)
-    # hash without the generated-at stamp, so an unchanged queue is unchanged
-    digest = hashlib.sha256(page.replace(esc(queue.get("generatedAt", "")), "").encode()).hexdigest()
+    items = [entry(root, e, b) for b in BUCKETS for e in queue.get("buckets", {}).get(b, [])]
+    data = {"generatedAt": queue.get("generatedAt"), "items": items}
+
+    template_path = root / "template.html" if (root / "template.html").exists() else SKILL_DIR / "assets" / "template.html"
+    template = template_path.read_text()
+    if "/*__DATA__*/" not in template:
+        print(f"error: {template_path} has no /*__DATA__*/ placeholder", file=sys.stderr)
+        return 2
+    payload = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
+    page = template.replace("/*__DATA__*/", payload, 1)
     (root / "queue.html").write_text(page)
+
+    # hash the data without the timestamp, so an unchanged queue is unchanged
+    digest = hashlib.sha256(json.dumps({**data, "generatedAt": None}, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     dpath = root / "deliver.json"
     state = json.loads(dpath.read_text()) if dpath.exists() else {}
     changed = state.get("contentHash") != digest
     state["contentHash"] = digest
     dpath.write_text(json.dumps(state, indent=2) + "\n")
-    print(json.dumps({"html": str(root / "queue.html"), "changed": changed, "artifactId": state.get("artifactId")}))
+    print(json.dumps({"html": str(root / "queue.html"), "changed": changed, "artifactId": state.get("artifactId"), "items": len(items)}))
     return 0
 
 

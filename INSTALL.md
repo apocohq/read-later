@@ -100,12 +100,13 @@ The daily run at 18:00 means everything saved during the day is in that evening'
   done/  archive/   moved there by prune
   topics.md         categories + weighted topics
   context.md        pointer to the reader's context, or NO CONTEXT AVAILABLE
-  queue.json queue.md queue.html   the current queue
+  queue.json        the current order and buckets (from rank)
+  queue.html        the library page deliver publishes
   deliver.json      artifact id + last published hash
   feedback.jsonl    every archive, done and move
 ```
 
-Check on things with `dam file list <agent> work/read-later` and `dam file get <agent> work/read-later/queue.md --stdout`. A run's transcript is at `.claude/projects/-home-agent-work/<session>.jsonl`; `dam session list <agent>` gives the ids.
+Check on things with `dam file list <agent> work/read-later` and `dam file get <agent> work/read-later/queue.json --stdout`. A run's transcript is at `.claude/projects/-home-agent-work/<session>.jsonl`; `dam session list <agent>` gives the ids.
 
 ## Notes
 

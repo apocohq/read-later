@@ -102,13 +102,13 @@ Written at setup. Either names where the reader's context lives (files or notes 
 
 Two flat lists, seeded by `read-later-analyze` from its `references/topics.md`. `# Categories`: the shelves, one per item, hand-edited; also the analyzer's allowed values. `# Topics`: labels, `- label` or `- label: N` where N (0-10) is how much the reader cares now; unweighted counts as 5. The analyzer appends coined labels; `read-later-rank` reads the weights.
 
-## Queue — `queue.md`, `queue.json`
+## Queue — `queue.json`
 
-Written by `read-later-rank`. Buckets `read_today`, `read_next`, `later`; each entry carries `item`, `title`, `url`, `priority`, `relevance`, `quality`, `minutes`, `tldr`, `category`, `topics`, `notes`. Generated files: change the weights or the script, not these.
+Written by `read-later-rank`; the only input `read-later-deliver` needs besides the items. Buckets `read_today`, `read_next`, `later`; each entry carries `item`, `title`, `url`, `priority`, `relevance`, `quality`, `minutes`, `tldr`, `category`, `topics`, `notes`. Generated files: change the weights or the script, not these.
 
 ## Delivery — `queue.html`, `deliver.json`
 
-`read-later-deliver` renders `queue.html` from `queue.json` and keeps `deliver.json`: `{"contentHash": "…", "artifactId": "…"}`. The artifact id is the one queue artifact in the library; the hash lets an unchanged queue skip publishing.
+`read-later-deliver` renders `queue.html` from its template plus `queue.json` and the items, and keeps `deliver.json`: `{"contentHash": "…", "artifactId": "…"}`. The artifact id is the one queue artifact in the library; the hash lets an unchanged queue skip publishing.
 
 ## Log — `feedback.jsonl`
 

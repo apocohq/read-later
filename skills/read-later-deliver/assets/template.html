@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Read later</title>
+<style>
+:root{
+  --bg:#efeae2;--bg2:#e6e0d6;--paper:#fbf9f5;--ink:#1f1d1a;--ink2:#5f5a52;--ink3:#8f887c;--line:#d8d1c5;--accent:#8a4b2f;--accent2:#c48a5a;
+  --shadow:0 1px 2px rgba(40,30,20,.12),0 10px 24px -12px rgba(40,30,20,.35);
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#171614;--bg2:#1f1d1a;--paper:#242220;--ink:#ece7df;--ink2:#b5ada1;--ink3:#7f786d;--line:#37332e;--accent:#d9a06f;--accent2:#b07a4e;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 28px -12px rgba(0,0,0,.7);
+}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:15px/1.5 -apple-system,"Segoe UI",Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.serif{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif}
+a{color:inherit}
+main{max-width:1180px;margin:0 auto;padding:36px 28px 90px}
+
+/* header */
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:26px}
+header h1{font-size:30px;margin:0;letter-spacing:-.01em;font-weight:600}
+header .sub{color:var(--ink2);font-size:13px;margin-top:4px}
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:transparent;color:var(--ink2);border-radius:999px;padding:5px 12px;font-size:13px;cursor:pointer;font-family:inherit}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip:focus-visible,.tile:focus-visible,.close:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=search]{border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;min-width:180px}
+
+/* shelves */
+.shelf{margin-top:34px}
+.shelf h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);margin:0 0 14px;display:flex;gap:10px;align-items:baseline}
+.shelf h2 small{letter-spacing:0;text-transform:none;color:var(--ink3);font-weight:400}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:22px 18px;padding-bottom:22px;position:relative}
+.grid::after{content:"";position:absolute;left:-8px;right:-8px;bottom:0;height:8px;background:var(--bg2);border-radius:4px;box-shadow:inset 0 2px 3px rgba(0,0,0,.08)}
+.grid.hidden{display:none}
+.empty{color:var(--ink3);font-style:italic;font-size:14px;padding:8px 0 22px}
+
+/* tile = book */
+.tile{background:none;border:0;padding:0;text-align:left;cursor:pointer;color:inherit;font:inherit;display:flex;flex-direction:column;gap:9px;width:100%}
+.cover{position:relative;aspect-ratio:2/3;border-radius:3px 8px 8px 3px;box-shadow:var(--shadow);overflow:hidden;color:#fff;padding:14px 14px 12px 18px;display:flex;flex-direction:column;justify-content:space-between;
+  background:linear-gradient(160deg,var(--c1) 0%,var(--c2) 100%);transition:transform .18s ease,box-shadow .18s ease}
+.cover::before{content:"";position:absolute;left:0;top:0;bottom:0;width:7px;background:linear-gradient(90deg,rgba(0,0,0,.28),rgba(255,255,255,.08));}
+.cover::after{content:"";position:absolute;right:0;top:0;bottom:0;width:3px;background:repeating-linear-gradient(180deg,rgba(255,255,255,.5) 0 1px,rgba(0,0,0,.15) 1px 2px);opacity:.7}
+.tile:hover .cover{transform:translateY(-3px) rotate(-.4deg);box-shadow:0 2px 3px rgba(40,30,20,.14),0 18px 30px -14px rgba(40,30,20,.5)}
+.cover .kicker{font-size:10px;letter-spacing:.14em;text-transform:uppercase;opacity:.9;display:flex;justify-content:space-between;align-items:center;gap:6px;min-width:0}
+.cover .kicker .cat{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cover .kicker .pill{flex:none;background:#f2c14e;color:#222;border-radius:3px;padding:1px 6px;letter-spacing:.08em;font-weight:700}
+.cover .title{font-size:15px;line-height:1.25;font-weight:600;text-wrap:balance;text-shadow:0 1px 2px rgba(0,0,0,.25);display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
+.cover .foot{font-size:11px;opacity:.9;display:flex;justify-content:space-between;gap:6px}
+.under{display:flex;flex-direction:column;gap:6px;padding:0 2px}
+.bars{display:grid;grid-template-columns:auto 1fr;gap:3px 8px;align-items:center;font-size:10.5px;color:var(--ink3)}
+.bar{height:3px;background:var(--line);border-radius:2px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ink2);border-radius:2px}
+.bar.hw i{background:var(--accent)}.bar.gr i{background:var(--accent2)}.bar.rl i{background:var(--ink2)}
+.under .t{font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* reader */
+.reader{position:fixed;inset:0;background:rgba(20,16,12,.55);display:none;align-items:stretch;justify-content:flex-end;z-index:10}
+.reader.open{display:flex}
+.pane{width:min(820px,100%);background:var(--paper);height:100%;overflow:auto;box-shadow:-20px 0 60px rgba(0,0,0,.3);animation:slide .22s ease}
+@keyframes slide{from{transform:translateX(24px);opacity:.6}to{transform:none;opacity:1}}
+.pane .head{padding:26px 36px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--paper);z-index:1;display:flex;gap:18px;align-items:flex-start}
+.pane .head .mini{width:56px;flex:none;aspect-ratio:2/3;border-radius:2px 5px 5px 2px;background:linear-gradient(160deg,var(--c1),var(--c2));box-shadow:var(--shadow)}
+.pane .head h2{margin:0 0 6px;font-size:24px;line-height:1.2;font-weight:600;text-wrap:balance}
+.pane .meta{font-size:13px;color:var(--ink2);display:flex;gap:6px 14px;flex-wrap:wrap}
+.pane .meta a{color:var(--accent);text-decoration:none}.pane .meta a:hover{text-decoration:underline}
+.close{margin-left:auto;flex:none;border:1px solid var(--line);background:transparent;color:var(--ink2);border-radius:999px;width:34px;height:34px;cursor:pointer;font-size:18px;line-height:1}
+.pane .body{padding:22px 36px 60px;display:grid;gap:22px}
+.tldr{font-size:17px;line-height:1.5;margin:0}
+.claims{margin:0;padding-left:18px;color:var(--ink)}.claims li{margin:4px 0}
+.scores{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.score{border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.score .n{display:flex;justify-content:space-between;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+.score .n b{color:var(--ink);font-size:14px;letter-spacing:0}
+.score .bar{margin:8px 0}.score p{margin:0;font-size:13px;color:var(--ink2)}
+.tags{display:flex;gap:6px;flex-wrap:wrap}.tag{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:2px 9px;color:var(--ink2)}
+.divider{display:flex;align-items:center;gap:12px;color:var(--ink3);font-size:12px;letter-spacing:.12em;text-transform:uppercase}
+.divider::before,.divider::after{content:"";flex:1;border-top:1px solid var(--line)}
+.article{font-size:17px;line-height:1.65;max-width:66ch}
+.article h1,.article h2,.article h3{line-height:1.25;margin:1.6em 0 .5em;font-weight:600}.article h1{font-size:26px}.article h2{font-size:22px}.article h3{font-size:18px}
+.article p{margin:0 0 1em}.article img{max-width:100%;height:auto;border-radius:6px;margin:.4em 0}
+.article a{color:var(--accent)}.article blockquote{margin:1em 0;padding:.2em 1em;border-left:3px solid var(--line);color:var(--ink2)}
+.article pre{background:var(--bg2);padding:12px 14px;border-radius:6px;overflow:auto;font-size:13.5px}.article code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.92em}
+.article ul,.article ol{padding-left:1.4em}.article li{margin:.25em 0}.article table{border-collapse:collapse;font-size:14px}.article td,.article th{border:1px solid var(--line);padding:4px 8px}
+.article hr{border:0;border-top:1px solid var(--line);margin:1.5em 0}
+.note{font-size:12.5px;color:var(--ink3)}
+@media (max-width:640px){main{padding:24px 16px 70px}.grid{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:16px 12px}.pane .head,.pane .body{padding-left:20px;padding-right:20px}}
+@media (prefers-reduced-motion:reduce){.pane{animation:none}.tile:hover .cover{transform:none}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1 class="serif">Read later</h1>
+      <div class="sub" id="sub"></div>
+    </div>
+    <div class="controls" id="controls">
+      <button class="chip" data-f="all" aria-pressed="true">All</button>
+      <button class="chip" data-f="read_today">Tonight</button>
+      <button class="chip" data-f="read_next">Next</button>
+      <button class="chip" data-f="later">Later</button>
+      <input type="search" id="q" placeholder="Search title, topic, text" aria-label="Search">
+    </div>
+  </header>
+  <section class="shelf" id="s-read_today"><h2>Tonight <small id="n-read_today"></small></h2><div class="grid"></div></section>
+  <section class="shelf" id="s-read_next"><h2>Next <small id="n-read_next"></small></h2><div class="grid"></div></section>
+  <section class="shelf" id="s-later"><h2>Later <small id="n-later"></small></h2><div class="grid"></div></section>
+  <p class="note">Tiles are the articles you saved, ordered by how much you care about their topics and how much substance they have. Click one to read it here. Marking as read or removing happens from the browser extension.</p>
+</main>
+
+<div class="reader" id="reader" role="dialog" aria-modal="true" aria-labelledby="r-title">
+  <div class="pane" id="pane"></div>
+</div>
+
+<script id="data" type="application/json">/*__DATA__*/</script>
+<script>
+(function(){
+  const DATA = JSON.parse(document.getElementById('data').textContent);
+  const items = DATA.items || [];
+  const HUES = {'ai-and-agents':[262,48],'engineering':[204,42],'product':[338,40],'business-and-strategy':[28,55],'leadership':[150,30],'research':[190,35],'news':[0,45],'personal':[95,30],'other':[220,10]};
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const domain = u => { try { return new URL(u).hostname.replace(/^www\./,''); } catch { return u; } };
+  const colors = cat => { const [h,s] = HUES[cat] || HUES.other; return `--c1:hsl(${h} ${s}% 34%);--c2:hsl(${(h+18)%360} ${Math.max(20,s-10)}% 22%)`; };
+  const pct = v => Math.max(0, Math.min(100, (Number(v)||0) * 10));
+
+  document.getElementById('sub').textContent = `${items.length} saved · generated ${(DATA.generatedAt||'').replace('T',' ').replace(/:\d\d(\.\d+)?Z$/,' UTC')}`;
+
+  function tile(it){
+    const b = document.createElement('button'); b.className = 'tile'; b.setAttribute('aria-label', it.title || it.url);
+    b.innerHTML = `
+      <div class="cover" style="${colors(it.category)}">
+        <div class="kicker"><span class="cat">${esc(it.category||'')}</span>${it.mustRead ? '<span class="pill">must</span>' : ''}</div>
+        <div class="title serif">${esc(it.title||it.url)}</div>
+        <div class="foot"><span>${esc(domain(it.url))}</span><span>${esc(it.minutes)} min</span></div>
+      </div>
+      <div class="under">
+        <div class="bars">
+          <span>relevance</span><div class="bar rl"><i style="width:${pct(it.relevance)}%"></i></div>
+          <span>hard-won</span><div class="bar hw"><i style="width:${pct(it.hardWon&&it.hardWon.score)}%"></i></div>
+          <span>grounded</span><div class="bar gr"><i style="width:${pct(it.grounded&&it.grounded.score)}%"></i></div>
+        </div>
+        <div class="t">${esc((it.topics||[]).join(' · '))}</div>
+      </div>`;
+    b.addEventListener('click', () => open(it));
+    return b;
+  }
+
+  function render(filter, q){
+    q = (q||'').trim().toLowerCase();
+    for (const key of ['read_today','read_next','later']){
+      const sec = document.getElementById('s-'+key), grid = sec.querySelector('.grid');
+      grid.innerHTML = '';
+      const rows = items.filter(it => it.bucket===key && (filter==='all' || filter===key) && (!q || [it.title, it.tldr, (it.topics||[]).join(' '), it.category, it.markdown].join(' ').toLowerCase().includes(q)));
+      document.getElementById('n-'+key).textContent = rows.length ? `${rows.length}` : '';
+      sec.style.display = (filter==='all' || filter===key) ? '' : 'none';
+      if (!rows.length){ grid.insertAdjacentHTML('beforeend', `<div class="empty">${q ? 'No match.' : 'Nothing here.'}</div>`); continue; }
+      rows.forEach(it => grid.appendChild(tile(it)));
+    }
+  }
+
+  // --- minimal markdown -> html (headings, lists, quotes, code, images, links, emphasis) ---
+  function md(src){
+    const lines = (src||'').split('\n'); let out = [], para = [], list = null, code = null;
+    const inline = s => esc(s)
+      .replace(/!\[([^\]]*)\]\(([^)\s]+)[^)]*\)/g, (m,a,u) => /^https?:\/\//.test(u) ? `<img alt="${a}" src="${u}" loading="lazy">` : '')
+      .replace(/\[([^\]]+)\]\(([^)\s]+)[^)]*\)/g, (m,t,u) => /^https?:\/\//.test(u) ? `<a href="${u}" target="_blank" rel="noopener">${t}</a>` : t)
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>');
+    const flush = () => { if (para.length){ out.push('<p>'+inline(para.join(' '))+'</p>'); para = []; } if (list){ out.push(`</${list}>`); list = null; } };
+    for (const raw of lines){
+      const l = raw.replace(/\s+$/,'');
+      if (code !== null){ if (/^```/.test(l)){ out.push('<pre><code>'+esc(code.join('\n'))+'</code></pre>'); code = null; } else code.push(l); continue; }
+      if (/^```/.test(l)){ flush(); code = []; continue; }
+      if (!l.trim()){ flush(); continue; }
+      let m;
+      if ((m = l.match(/^(#{1,6})\s+(.*)/))){ flush(); const n = Math.min(3, m[1].length); out.push(`<h${n}>${inline(m[2])}</h${n}>`); continue; }
+      if (/^(-{3,}|\*{3,})$/.test(l)){ flush(); out.push('<hr>'); continue; }
+      if ((m = l.match(/^>\s?(.*)/))){ flush(); out.push('<blockquote>'+inline(m[1])+'</blockquote>'); continue; }
+      if ((m = l.match(/^\s*[-*+]\s+(.*)/))){ if (list!=='ul'){ flush(); list='ul'; out.push('<ul>'); } out.push('<li>'+inline(m[1])+'</li>'); continue; }
+      if ((m = l.match(/^\s*\d+[.)]\s+(.*)/))){ if (list!=='ol'){ flush(); list='ol'; out.push('<ol>'); } out.push('<li>'+inline(m[1])+'</li>'); continue; }
+      if (/^!\[[^\]]*\]\(/.test(l.trim())){ flush(); out.push('<p>'+inline(l.trim())+'</p>'); continue; }
+      if (list){ flush(); }
+      para.push(l.trim());
+    }
+    flush(); if (code) out.push('<pre><code>'+esc(code.join('\n'))+'</code></pre>');
+    return out.join('\n');
+  }
+
+  const reader = document.getElementById('reader'), pane = document.getElementById('pane');
+  function open(it){
+    const sc = (k, label) => { const s = it[k] || {}; return `<div class="score"><div class="n"><span>${label}</span><b>${esc(s.score ?? '–')}<span style="color:var(--ink3);font-size:11px"> /10</span></b></div><div class="bar ${k==='hardWon'?'hw':'gr'}"><i style="width:${pct(s.score)}%"></i></div><p>${esc(s.reason||'')}</p></div>`; };
+    pane.innerHTML = `
+      <div class="head">
+        <div class="mini" style="${colors(it.category)}"></div>
+        <div style="min-width:0">
+          <h2 id="r-title" class="serif">${esc(it.title||it.url)}</h2>
+          <div class="meta">
+            <span>${esc(domain(it.url))}</span>${it.author ? `<span>${esc(it.author)}</span>` : ''}${it.published ? `<span>${esc(it.published)}</span>` : ''}
+            <span>${esc(it.minutes)} min · ${esc(it.words)} words</span><span>${esc(it.category)}${it.contentType ? ' · '+esc(it.contentType) : ''}</span>
+            <a href="${esc(it.url)}" target="_blank" rel="noopener">Open original ↗</a>
+          </div>
+        </div>
+        <button class="close" aria-label="Close">×</button>
+      </div>
+      <div class="body">
+        <p class="tldr serif">${esc(it.tldr||'')}</p>
+        ${(it.keyClaims||[]).length ? `<ul class="claims">${it.keyClaims.map(c=>`<li>${esc(c)}</li>`).join('')}</ul>` : ''}
+        <div class="scores">
+          ${sc('hardWon','hard-won')}${sc('grounded','grounded')}
+          <div class="score"><div class="n"><span>relevance</span><b>${esc(it.relevance ?? '–')}<span style="color:var(--ink3);font-size:11px"> /10</span></b></div><div class="bar rl"><i style="width:${pct(it.relevance)}%"></i></div><p>From the weights of its topics in topics.md. Priority ${esc(it.priority)}${(it.notes||[]).length ? ' · '+esc(it.notes.join(', ')) : ''}.</p></div>
+        </div>
+        <div class="tags">${(it.topics||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>
+        <div class="divider">The article</div>
+        <div class="article serif">${it.markdown ? md(it.markdown) : '<p class="note">Full text not included.</p>'}</div>
+      </div>`;
+    pane.querySelector('.close').addEventListener('click', close);
+    reader.classList.add('open'); document.body.style.overflow = 'hidden'; pane.scrollTop = 0;
+    history.replaceState(null, '', '#'+encodeURIComponent(it.id||''));
+  }
+  function close(){ reader.classList.remove('open'); document.body.style.overflow = ''; history.replaceState(null, '', location.pathname); }
+  reader.addEventListener('click', e => { if (e.target === reader) close(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && reader.classList.contains('open')) close(); });
+
+  let filter = 'all';
+  document.getElementById('controls').addEventListener('click', e => {
+    const b = e.target.closest('.chip'); if (!b) return;
+    filter = b.dataset.f; document.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', c === b ? 'true' : 'false'));
+    render(filter, document.getElementById('q').value);
+  });
+  document.getElementById('q').addEventListener('input', e => render(filter, e.target.value));
+  render(filter, '');
+  const want = decodeURIComponent(location.hash.slice(1)); const hit = want && items.find(i => i.id === want); if (hit) open(hit);
+})();
+</script>
+</body>
+</html>

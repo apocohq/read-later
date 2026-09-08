@@ -8,11 +8,13 @@ metadata:
 
 # Read Later · Deliver
 
-Turns `queue.json` into a single self-contained page and publishes it to the artifact library. One artifact, one link, a new version each time the queue changes. Nothing is published when nothing changed.
+Publishes the reader's library as one self-contained page in the artifact library: a shelf of book-like tiles (Tonight, Next, Later), each with its scores as bars; a click opens the TL;DR, claims, score reasons and the full article text. One artifact, one link, a new version each time the data changes. Nothing is published when nothing changed.
+
+The page is `assets/template.html` (design) plus data injected by `scripts/render.py` from `queue.json` and the items' `item.json` and `content.md`. To restyle for one reader, copy the template to `~/work/read-later/template.html` and edit; the copy wins.
 
 ## Available scripts
 
-- **`scripts/render.py`** — writes `queue.html` and prints `{"html", "changed", "artifactId"}`. It records the page's content hash in `deliver.json`, so `changed` is false when the queue is the same as the last publish.
+- **`scripts/render.py`** — writes `queue.html` and prints `{"html", "changed", "artifactId", "items"}`. It records the data's hash in `deliver.json`, so `changed` is false when nothing in the queue or the items changed since the last publish.
 
 ## Run
 
@@ -36,5 +38,5 @@ Reply with the internal link as a markdown link (`[Read later](platform://artifa
 
 ## Rules
 
-- `queue.html` and `deliver.json` are generated; fix the renderer or the ranking, never the files.
+- `queue.html` and `deliver.json` are generated; fix the template, the renderer or the ranking, never the files.
 - The artifact is a static page. Marking something read or removing it happens through the Chrome extension ("Mark as read", "Remove from Read Later") or by telling the agent; the page cannot call back.

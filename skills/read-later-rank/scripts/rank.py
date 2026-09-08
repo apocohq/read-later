@@ -18,7 +18,7 @@ Scoring, per item, all on a 0-10 scale:
               news/announcements published more than 14 days ago.
 
 Buckets: the top item is "Read today", the next N "Read next", the rest "Later".
-Writes STATE_DIR/queue.json and STATE_DIR/queue.md and prints the queue.
+Writes STATE_DIR/queue.json (the order and buckets read-later-deliver renders) and prints a short text view.
 Exit codes: 0 ran, 2 bad arguments, 3 STATE_DIR not usable.
 """
 from __future__ import annotations
@@ -113,7 +113,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("state_dir", metavar="STATE_DIR")
     ap.add_argument("--today", type=int, default=1, help="items in Read today (default 1)")
     ap.add_argument("--next", dest="next_", type=int, default=4, help="items in Read next (default 4)")
-    ap.add_argument("--json", action="store_true", help="print queue.json to stdout instead of the Markdown")
+    ap.add_argument("--json", action="store_true", help="print queue.json to stdout instead of the text view")
     args = ap.parse_args(argv)
     root = Path(args.state_dir).expanduser().resolve()
     if not (root / "items").is_dir():
@@ -138,9 +138,7 @@ def main(argv: list[str]) -> int:
     queue = {"generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"), "weights": WEIGHTS,
              "buckets": {k: [{kk: vv for kk, vv in e.items() if kk != "analysis"} | {"tldr": e["analysis"]["tldr"], "category": e["analysis"]["category"], "topics": e["analysis"]["topics"]} for e in v] for k, v in buckets.items()}}
     (root / "queue.json").write_text(json.dumps(queue, indent=2, ensure_ascii=False) + "\n")
-    md = render_md(buckets, today)
-    (root / "queue.md").write_text(md + "\n")
-    print(json.dumps(queue, indent=2, ensure_ascii=False) if args.json else md)
+    print(json.dumps(queue, indent=2, ensure_ascii=False) if args.json else render_md(buckets, today))
     print(f"ranked {len(ranked)} item(s), skipped {skipped} (unanalyzed or outdated analysis, done, archived, not-an-article or stale news)", file=sys.stderr)
     return 0
 
