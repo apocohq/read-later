@@ -16,14 +16,12 @@ Layout under STATE_DIR:
     inbox/<id>.json            one event per file, written by the Chrome extension
     items/<folder>/item.json   one folder per page: <capturedAt>-<title slug>
     items/<folder>/content.md  the article: short frontmatter + Markdown (with images)
-    items/<folder>/highlights.json  the reader's highlights, from the library page
     feedback.jsonl             append-only log (archive lines land here)
 
 Dedup key is the canonical `url` inside each item.json; there is no separate index.
 
 Events: `capture` (default) adds a page; `remove` retracts earlier captures of the same URL
-(drops unprocessed ones, archives a processed item); `done` marks a processed item as read;
-`highlight` replaces the item's highlights.json. `done` may carry highlights too.
+(drops unprocessed ones, archives a processed item); `done` marks a processed item as read.
 
 Inbox content is untrusted input. This script parses it; it never executes it.
 
@@ -65,16 +63,12 @@ def load_events(inbox: Path) -> list[dict]:
     for path in sorted(inbox.glob("*.json")):
         try:
             ev = json.loads(path.read_text())
-            if not isinstance(ev, dict) or not isinstance(ev.get("url"), str) or not ev["url"] or not isinstance(ev.get("capturedAt"), str) or not ev["capturedAt"]:
+            if not isinstance(ev, dict) or not ev.get("url") or not ev.get("capturedAt"):
                 raise ValueError("missing url or capturedAt")
             ev.setdefault("action", "capture")
             ev.setdefault("source", "unknown")
-            if ev["action"] not in ("capture", "remove", "done", "highlight"):
+            if ev["action"] not in ("capture", "remove", "done"):
                 raise ValueError(f"unknown action {ev['action']!r}")
-            if "highlights" in ev and not isinstance(ev["highlights"], list):
-                raise ValueError("highlights must be a list")
-            if ev["action"] == "highlight" and "highlights" not in ev:
-                raise ValueError("highlight event without highlights")
             ev["_path"] = path
             events.append(ev)
         except Exception as e:  # noqa: BLE001
@@ -206,23 +200,19 @@ class Store:
         self.items = root / "items"
         self.items.mkdir(parents=True, exist_ok=True)
         self.by_url: dict[str, str] = {}
-        self.done_by_url: dict[str, str] = {}  # items prune already moved to done/; late highlights still land there
-        for index, base in ((self.by_url, self.items), (self.done_by_url, root / "done")):
-            for p in base.glob("*/item.json"):
-                try:
-                    url = json.loads(p.read_text()).get("url")
-                    if url:
-                        index[url] = p.parent.name
-                except Exception as e:  # noqa: BLE001
-                    print(f"skip unreadable {p}: {e}", file=sys.stderr)
+        for p in self.items.glob("*/item.json"):
+            try:
+                url = json.loads(p.read_text()).get("url")
+                if url:
+                    self.by_url[url] = p.parent.name
+            except Exception as e:  # noqa: BLE001
+                print(f"skip unreadable {p}: {e}", file=sys.stderr)
 
-    def get(self, canonical: str, include_done: bool = False) -> tuple[str, dict] | None:
-        """Returns (folder, item). The folder is relative to the state dir: `items/<f>`, or `done/<f>` when include_done finds it there."""
-        if folder := self.by_url.get(canonical):
-            return f"items/{folder}", json.loads((self.items / folder / "item.json").read_text())
-        if include_done and (folder := self.done_by_url.get(canonical)):
-            return f"done/{folder}", json.loads((self.root / "done" / folder / "item.json").read_text())
-        return None
+    def get(self, canonical: str) -> tuple[str, dict] | None:
+        folder = self.by_url.get(canonical)
+        if not folder:
+            return None
+        return folder, json.loads((self.items / folder / "item.json").read_text())
 
     def new_folder(self, captured_at: str, title: str | None, canonical: str) -> str:
         base = folder_name(captured_at, title, canonical)
@@ -240,19 +230,6 @@ class Store:
             (d / "content.md").write_text(f"---\n{front}\n---\n\n{markdown}\n")
         (d / "item.json").write_text(json.dumps(item, indent=2, ensure_ascii=False) + "\n")
         self.by_url[item["url"]] = folder
-
-    def save_highlights(self, rel_folder: str, highlights: list[dict], at: str) -> int:
-        """Replace the item's highlights with the event's set. Keeps only known, well-typed fields; the text is untrusted and stays a string."""
-        strings, ints = ("id", "exact", "prefix", "suffix", "note", "createdAt"), ("start", "end")
-        clean = []
-        for h in highlights:
-            if not isinstance(h, dict) or not isinstance(h.get("id"), str) or not h["id"] or not isinstance(h.get("exact"), str) or not h["exact"].strip():
-                continue
-            rec = {k: h[k] for k in strings if isinstance(h.get(k), str) and h[k]}
-            rec.update({k: h[k] for k in ints if isinstance(h.get(k), int) and not isinstance(h[k], bool)})
-            clean.append(rec)
-        (self.root / rel_folder / "highlights.json").write_text(json.dumps({"updatedAt": at, "highlights": clean}, indent=2, ensure_ascii=False) + "\n")
-        return len(clean)
 
     def feedback(self, line: dict) -> None:
         with (self.root / "feedback.jsonl").open("a") as f:
@@ -272,33 +249,24 @@ def capture_record(ev: dict) -> dict:
 # ---------- run ----------
 
 def apply_done(store: Store, events: list[dict]) -> list[dict]:
-    """`done` and `highlight` events act on an existing item: highlights replace highlights.json, done marks it read.
-    Returns the other events. An event for an unknown URL is dropped with a note."""
+    """`done` events mark an existing item as read. Returns the other events. A done for an unknown URL is dropped with a note."""
     rest = []
-    for ev in sorted(events, key=lambda e: e["capturedAt"]):  # last highlight set wins
-        if ev["action"] not in ("done", "highlight"):
+    for ev in events:
+        if ev["action"] != "done":
             rest.append(ev)
             continue
         canonical = canonicalize(ev["url"])
-        found = store.get(canonical, include_done=True)
+        found = store.get(canonical)
         if found and found[1]["status"] not in ("archived",):
-            rel, item = found
-            if "highlights" in ev:
-                n = store.save_highlights(rel, ev["highlights"], ev["capturedAt"])
-                store.feedback({"item": rel.split("/", 1)[1], "action": "highlight", "reason": f"{n} highlight(s) via {ev.get('source', '?')}", "at": now()})
-                print(f"highlight {rel}  {n} highlight(s)", file=sys.stderr)
-                print(json.dumps({"item": rel, "action": "highlight", "highlights": n}))
-            if ev["action"] == "done":
-                if item["status"] != "done" and rel.startswith("items/"):
-                    item["status"] = "done"
-                    item["doneAt"] = ev["capturedAt"]
-                    store.save(rel.split("/", 1)[1], item)
-                    store.feedback({"item": rel.split("/", 1)[1], "action": "done", "reason": f"marked via {ev.get('source', '?')}", "at": now()})
-                print(f"done      {rel}", file=sys.stderr)
-                print(json.dumps({"item": rel, "action": "done"}))
+            folder, item = found
+            if item["status"] != "done":
+                item["status"] = "done"
+                item["doneAt"] = ev["capturedAt"]
+                store.save(folder, item)
+                store.feedback({"item": folder, "action": "done", "reason": f"marked via {ev.get('source', '?')}", "at": now()})
+            print(f"done      items/{folder}", file=sys.stderr)
         else:
-            print(f"dropped   {ev['_path'].name}  {ev['action']} for an unknown or archived item  {canonical}", file=sys.stderr)
-            print(json.dumps({"action": ev["action"], "url": canonical, "dropped": "unknown or archived item"}))
+            print(f"dropped   {ev['_path'].name}  done for an unknown or archived item  {canonical}", file=sys.stderr)
         ev["_path"].unlink(missing_ok=True)
     return rest
 
@@ -321,7 +289,7 @@ def apply_removals(store: Store, events: list[dict]) -> dict[str, list[dict]]:
         if keep:
             survivors[canonical] = keep
         elif (found := store.get(canonical)) and found[1]["status"] != "archived":
-            folder, item = found[0].split("/", 1)[1], found[1]
+            folder, item = found
             item["status"] = "archived"
             store.save(folder, item)
             store.feedback({"item": folder, "action": "archive", "reason": f"removed via {group[-1].get('source', '?')}", "at": now()})
@@ -353,15 +321,13 @@ def main(argv: list[str]) -> int:
     events = load_events(store.inbox)
     if args.dry_run:
         for ev in events:
-            print(json.dumps({"id": ev.get("id", ev["_path"].stem), "action": ev["action"], "url": canonicalize(ev["url"]), "hasHtml": bool(ev.get("html")), "highlights": len(ev["highlights"]) if "highlights" in ev else None}))
+            print(json.dumps({"id": ev.get("id", ev["_path"].stem), "action": ev["action"], "url": canonicalize(ev["url"]), "hasHtml": bool(ev.get("html"))}))
         print(f"dry run: {len(events)} event(s), nothing written", file=sys.stderr)
         return 0
 
     ok = failed = 0
     for canonical, evs in apply_removals(store, apply_done(store, events)).items():
         found = store.get(canonical)
-        if found:
-            found = (found[0].split("/", 1)[1], found[1])  # bare folder name under items/
         item = found[1] if found else {"url": canonical, "title": first_title(evs), "status": "captured", "mustRead": False, "captures": []}
         if found or len(evs) > 1:
             print(f"merged    {len(evs)} capture(s) into {'existing' if found else 'new'} item  {canonical}", file=sys.stderr)

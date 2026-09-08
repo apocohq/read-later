@@ -14,7 +14,17 @@ The page is `assets/template.html` (design) plus data injected by `scripts/rende
 
 ## Highlights
 
-In the reader pane the reader turns the highlighter on, selects text, and gets a mark; clicking a mark adds a note or removes it. Highlights live in the reader's browser (localStorage, per item) until they are sent to the agent as one JSON object holding the item's full current set. **Copy for chat** copies a `highlight` event, **Done reading** a `done` event with the highlights; the reader pastes it into chat and `read-later-ingest` writes `items/<folder>/highlights.json`. The renderer injects that file back into the page, so on the next publish the highlights show in every browser; marks not yet sent are underlined and counted as "unsent". The page cannot reach the agent itself yet; when DAM's artifact bridge ships, the page will send the same object directly and nothing on the agent changes.
+In the reader pane the reader turns the highlighter on, selects text, and gets a mark; clicking a mark adds a note or removes it. Highlights live in the reader's browser (localStorage, per item) until **Copy for chat** or **Done reading** puts the content of `highlights.json` on the clipboard and the reader pastes it into chat. The renderer injects that file back into the page, so after the next publish the highlights show in every browser; marks not yet sent are underlined and counted as "unsent". The page cannot write to the agent yet; when DAM's artifact bridge ships, the artifact will write the file itself.
+
+### When the reader pastes highlights
+
+The paste reads "My highlights, replace `items/<folder>/highlights.json` with this file:" followed by one JSON object with `item`, `url`, `updatedAt` and `highlights`. Do exactly that:
+
+1. Check that `~/work/read-later/items/<item>/` exists. If prune already moved it, use `~/work/read-later/done/<item>/`. If neither exists, say so and stop.
+2. Write the JSON verbatim to `highlights.json` in that folder, replacing the previous file. Do not edit, reorder or summarize it; the page produced it and reads it back.
+3. Reply with one line: how many highlights the file holds, e.g. "saved 4 highlights". They show in the library page after the next deliver.
+
+If the paste starts with "Done reading, mark it as read: <url>", also mark the item read the way `read-later-ingest` describes for chat: one `done` event into the inbox, then run its script. Highlights first, then done.
 
 ## Available scripts
 
@@ -43,5 +53,5 @@ Reply with the internal link as a markdown link (`[Read later](platform://artifa
 ## Rules
 
 - `queue.html` and `deliver.json` are generated; fix the template, the renderer or the ranking, never the files.
-- The artifact is a static page; it cannot call the agent. Marking something read or removing it happens through the Chrome extension ("Mark as read", "Remove from Read Later"), by telling the agent, or by pasting the page's **Done reading** JSON into chat. Highlights reach the agent only through that paste (see `read-later-ingest`).
-- Never write `highlights.json` by hand; it comes from ingest.
+- The artifact is a static page; it cannot call the agent. Marking something read or removing it happens through the Chrome extension ("Mark as read", "Remove from Read Later"), by telling the agent, or by pasting the page's **Done reading** message into chat. Highlights reach the agent only through that paste.
+- `highlights.json` is written only from a paste, verbatim. Never compose or edit one yourself.

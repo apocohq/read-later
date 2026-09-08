@@ -303,19 +303,20 @@ mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       for (const m of root.querySelectorAll(`mark.hl[data-id="${cssEsc(id)}"]`)){ const parent = m.parentNode; while (m.firstChild) parent.insertBefore(m.firstChild, m); m.remove(); parent.normalize(); }
     }
     function restyle(root, it, id){ const h = current(it).find(x => x.id === id); root.querySelectorAll(`mark.hl[data-id="${cssEsc(id)}"]`).forEach(m => h && decorate(m, it, h)); }
-    // --- outbox: one JSON object per send; today the clipboard, later DAM's artifact bridge ---
-    const event = (it, action) => {
-      const ev = { id: new Date().toISOString().replace(/[:.]/g,'-') + '-' + Math.random().toString(36).slice(2,7), action, source: 'artifact', url: it.url, item: it.id, title: it.title, capturedAt: new Date().toISOString() };
-      const list = current(it);
-      // An empty set is sent only when this page knew of synced highlights (the reader deleted them). A page that never saw any
-      // says nothing about highlights, so a "done" from a stale browser cannot wipe what another device sent.
-      if (list.length || synced(it).length) ev.highlights = list.map(({id, exact, prefix, suffix, start, end, note, createdAt}) => ({id, exact, prefix, suffix, start, end, ...(note ? {note} : {}), createdAt}));
-      return ev;
+    // --- outbox: the payload is highlights.json itself. Today it goes to the clipboard and the reader pastes it to the agent,
+    // which writes it into the item folder verbatim; later the artifact writes the file. "done" adds one line for the agent.
+    const file = it => ({ item: it.id, url: it.url, updatedAt: new Date().toISOString(), highlights: current(it).map(({id, exact, prefix, suffix, start, end, note, createdAt}) => ({id, exact, prefix, suffix, start, end, ...(note ? {note} : {}), createdAt})) });
+    // A page that never saw any highlights, synced or local, sends no file at all, so a "done" from a stale browser cannot wipe what another device sent.
+    const payload = (it, action) => {
+      const hasFile = current(it).length || synced(it).length;
+      const json = hasFile ? JSON.stringify(file(it), null, 2) : '';
+      if (action === 'done') return `Done reading, mark it as read: ${it.url}` + (json ? `\n\nMy highlights, replace items/${it.id}/highlights.json with this file:\n\n${json}` : '');
+      return `My highlights, replace items/${it.id}/highlights.json with this file:\n\n${json}`;
     };
     const transports = [
-      async (ev, ui) => { const text = JSON.stringify(ev, null, 2); try { await navigator.clipboard.writeText(text); ui.toast(ev.action === 'done' ? 'Copied. Paste it to your agent to finish this article.' : 'Copied. Paste it to your agent.'); } catch { ui.fallback(text); } return true; },
+      async (text, action, ui) => { try { await navigator.clipboard.writeText(text); ui.toast(action === 'done' ? 'Copied. Paste it to your agent to finish this article.' : 'Copied. Paste it to your agent.'); } catch { ui.fallback(text); } return true; },
     ];
-    async function emit(it, action, ui){ const ev = event(it, action); for (const t of transports) if (await t(ev, ui)) return ev; return null; }
+    async function emit(it, action, ui){ const text = payload(it, action); for (const t of transports) if (await t(text, action, ui)) return text; return null; }
     return { current, isLocal, add, remove, setNote, fromSelection, apply, applyOne, unwrap, restyle, emit, cssEsc, storageOk: () => storageOk };
   })();
 
@@ -374,8 +375,8 @@ mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
         <div class="row">
           <span class="n">Highlights <b>${list.length}</b>${unsent ? ` <span title="not yet sent to the agent">· ${unsent} unsent</span>` : ''}</span>
           <button class="chip ${hlOn ? 'on' : ''}" id="hl-toggle" aria-pressed="${hlOn}">${hlOn ? 'Highlighter on' : 'Highlighter off'}</button>
-          <button class="chip" id="hl-copy" ${list.length ? '' : 'disabled'} title="Copy the highlights as JSON for your agent">Copy for chat</button>
-          <button class="chip" id="hl-done" title="Copy a done event with the highlights for your agent">Done reading</button>
+          <button class="chip" id="hl-copy" ${list.length ? '' : 'disabled'} title="Copy highlights.json for your agent">Copy for chat</button>
+          <button class="chip" id="hl-done" title="Copy a done message, with the highlights, for your agent">Done reading</button>
         </div>
         ${list.length ? `<ul>${list.map(h => `<li><div class="q ${orphans.includes(h.id) ? 'orphan' : ''}" data-id="${esc(h.id)}" title="${orphans.includes(h.id) ? 'Not found in this text' : 'Show in the article'}">${esc(h.exact.length > 220 ? h.exact.slice(0, 220) + '…' : h.exact)}${h.note ? `<span class="nt">${esc(h.note)}</span>` : ''}</div><button class="x" data-id="${esc(h.id)}" aria-label="Remove highlight" title="Remove">×</button></li>`).join('')}</ul>` : `<p class="hint">${hlOn ? 'Select text in the article to highlight it. Click a highlight for a note or to remove it.' : 'Turn the highlighter on, then select text in the article.'}</p>`}
         ${HL.storageOk() ? '' : '<p class="warn">This browser is not keeping highlights between visits. Copy them before you close the page.</p>'}
