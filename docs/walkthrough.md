@@ -86,10 +86,15 @@ Tested locally on the three test articles with a stub SDK: ingest → analyze (o
 
 Known gaps from that run: the analyzer put KubeStellar under `ai-and-agents` where the categorize prompt's "reader's angle" rule suggests `engineering`; all topic weights were still 5, so relevance did not separate the items yet.
 
-## Step 5 · Deliver + daily schedule  ⏸ later
+## Step 5 · Deliver + prune + schedules  ⏭ testing
 
-`read-later-deliver`: hand the queue to the reader (Slack message, artifact page). Then one daily schedule runs ingest → analyze → rank → deliver.
+- `read-later-deliver`: `render.py` builds a self-contained `queue.html`; the agent publishes it once with `create_artifact` and then `update_artifact`s the same artifact whenever the content hash changes (`deliver.json`). Unchanged queue → no new version. Private by default. The page cannot call the agent back (DAM's artifact bridge is planned, not built), so read/remove actions go through the extension.
+- Extension: new **Mark as read** menu → `action: "done"`; ingest sets status `done`. Un-bookmark stays `remove` → `archived`.
+- `read-later-prune` (weekly): moves `done` → `done/`, `archived`/not-an-article/unread-30-days → `archive/`; the agent then weighs new labels and merges duplicates in `topics.md`.
+- Reweighing moved into `read-later-rank`, every run: read `context.md` (pointer to the reader's context, or `NO CONTEXT AVAILABLE` → skip), adjust weights, then rank.
+- Schedules: `read-later-daily` at 18:00 Prague (ingest → analyze → rank → deliver), `read-later-prune` weekly. The old `daily` schedule is gone.
+- `INSTALL.md` at the repo root: the whole setup for a new agent, tested by creating a fresh agent with the CLI and following it.
 
 ## Not in scope yet
 
-Slack sweep, feedback from reading (mark read, useful/not), multi-user template, name change.
+Slack sweep, feedback from what you read into the weights, multi-user template, name change, the artifact calling the agent back.

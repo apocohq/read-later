@@ -14,7 +14,7 @@ Scoring, per item, all on a 0-10 scale:
     priority  = 0.5 * relevance + 0.5 * quality
                 - 1 if the article is over 4000 words (long reads need to earn it)
                 + 3 if mustRead
-    excluded: archived items, items without analysis, `not-an-article`,
+    excluded: archived or done items, items without analysis, `not-an-article`,
               news/announcements published more than 14 days ago.
 
 Buckets: the top item is "Read today", the next N "Read next", the rest "Later".
@@ -61,7 +61,7 @@ def parse_date(value: str | None) -> date | None:
 
 def score(item: dict, weights: dict[str, int], today: date) -> tuple[float, dict] | None:
     a = item.get("analysis")
-    if not a or item.get("status") == "archived" or a.get("contentType") == "not-an-article":
+    if not a or item.get("status") in ("archived", "done") or a.get("contentType") == "not-an-article":
         return None
     if not isinstance(a.get("hardWon"), dict) or not isinstance(a.get("grounded"), dict):
         return None  # analysis from an older version; read-later-analyze will redo it
@@ -141,7 +141,7 @@ def main(argv: list[str]) -> int:
     md = render_md(buckets, today)
     (root / "queue.md").write_text(md + "\n")
     print(json.dumps(queue, indent=2, ensure_ascii=False) if args.json else md)
-    print(f"ranked {len(ranked)} item(s), skipped {skipped} (unanalyzed or outdated analysis, archived, not-an-article or stale news)", file=sys.stderr)
+    print(f"ranked {len(ranked)} item(s), skipped {skipped} (unanalyzed or outdated analysis, done, archived, not-an-article or stale news)", file=sys.stderr)
     return 0
 
 

@@ -7,19 +7,13 @@ Chrome extension  ──files.upload──▶  ~/work/read-later/inbox/<id>.json
 ```
 
 - `extension/` — the Chrome extension. Setup in `extension/README.md`.
-- `skills/` — the agent skills, one per capability: `read-later-ingest` (inbox → articles), `read-later-analyze` (articles → TL;DR, category, topics, scores), `read-later-rank` (→ tonight's queue). Install them onto any DAM agent from this repo.
+- `skills/` — the agent skills, one per capability: `read-later-ingest` (inbox → articles), `read-later-analyze` (articles → TL;DR, category, topics, scores), `read-later-rank` (weights + scores → tonight's queue), `read-later-deliver` (queue → one artifact), `read-later-prune` (weekly housekeeping).
+- `INSTALL.md` — setting up an agent, end to end.
 - `docs/walkthrough.md` — where we are and what is next.
 
-## Install the skill on an agent
+## Install
 
-```sh
-dam skill source add https://github.com/<org>/read-later      # once
-dam skill install <agent> --source https://github.com/<org>/read-later --name read-later-ingest
-dam skill install <agent> --source https://github.com/<org>/read-later --name read-later-analyze
-dam skill install <agent> --source https://github.com/<org>/read-later --name read-later-rank
-```
-
-Re-run install to update. Then ask the agent: *"ingest, analyze and rank read later"*.
+See `INSTALL.md`. In short: one DAM agent with a model connection, five skills installed from this repo, the extension pointed at the agent, two schedules.
 
 ## Develop
 
@@ -28,4 +22,6 @@ pnpm install && pnpm typecheck && pnpm ext:build        # extension → extensio
 uv run skills/read-later-ingest/scripts/ingest.py --help      # ingest script
 node skills/read-later-analyze/scripts/analyze.mjs --help     # analyze script (needs a DAM agent to actually spawn)
 python3 skills/read-later-rank/scripts/rank.py --help          # rank script
+python3 skills/read-later-deliver/scripts/render.py --help     # queue.html renderer
+python3 skills/read-later-prune/scripts/prune.py --help        # prune script
 ```

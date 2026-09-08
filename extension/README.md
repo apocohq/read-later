@@ -47,3 +47,8 @@ The strongest remaining hardening is server-side rather than in the extension: a
 ## Development
 
 `pnpm typecheck` covers `extension/src` with Chrome types. Rebuild with `pnpm ext:build` and click *Reload* on `chrome://extensions`. `dist/` is gitignored.
+
+
+## Actions
+
+Right-click the toolbar icon or the page for **Read later**, **Read later (must read)**, **Mark as read** (sends a `done` event; the agent moves the item to `done/`) and **Remove from Read Later** (sends `remove`; the agent archives it).

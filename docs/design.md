@@ -8,7 +8,7 @@ Status: direction for the first versions. Complements `product-brief.md`; where 
 |---|---|---|---|
 | **Capture** | How does material get to the agent? | `extension/` today; a Slack sweep later | `inbox/<id>.json` |
 | **Curate** | What is it, is it worth reading, and how does it rank? | `read-later-ingest`, `read-later-analyze`, `read-later-rank` | `items/<time>-<slug>/` (item.json with `analysis`, content.md), `topics.md`, `queue.md`/`queue.json` |
-| **Consume** | How is the result presented and acted on? | planned | `queue.md`, `queue.html` |
+| **Consume** | How is the result presented and acted on? | `read-later-deliver` (artifact), extension actions `done`/`remove`, `read-later-prune` | `queue.html` as one versioned artifact; `done/`, `archive/` |
 
 Code ships as an Agent Skill installed from this repo. State lives on the agent under `~/work/read-later/`. Each stage reads and writes only files there, so stages can be run and tested independently.
 
@@ -37,8 +37,9 @@ Steps: `ingest.py` (1 to 3), `analyze.mjs` (4), `rank.py` (5 to 7):
 
 ## Consume
 
-- **Slack DM (first surface).** The daily post is a short menu to choose from, not a verdict: Read today, Read next, with why-it-matters and confidence. Replies in the thread become feedback.
-- **Artifact.** `queue.html` is rendered by code from the files, so regenerating it after every run costs no model tokens. Published to the DAM artifact library each run. DAM artifacts are static HTML/JSX rendered in a sandboxed iframe with a version history and live refresh on republish; there is no supported data channel into an already-published page, so a regenerated page is the right model.
+- **Artifact (the surface).** `queue.html` is rendered by code from `queue.json`, so regenerating it costs no model tokens. Published once to the DAM artifact library and updated in place when the content hash changes, so it keeps one link and a version history. Artifacts are static pages in a sandboxed iframe; DAM's agent-calling bridge for interactive artifacts is planned, not built, so the page does not call back.
+- **Actions** come from the extension: **Mark as read** (`done`) and **Remove** (`remove` → archived), both plain inbox events. Weekly `prune` moves `done/` and `archive/` folders out of the pool.
+- **Reader context** enters through topic weights only: `rank` reweighs them each run from the context sources named in `context.md`, or skips when the file says `NO CONTEXT AVAILABLE`.
 - Later: a reader view per item, highlights, audio rendition, e-ink.
 
 ## Runtime and cost

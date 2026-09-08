@@ -20,6 +20,9 @@ Layout under STATE_DIR:
 
 Dedup key is the canonical `url` inside each item.json; there is no separate index.
 
+Events: `capture` (default) adds a page; `remove` retracts earlier captures of the same URL
+(drops unprocessed ones, archives a processed item); `done` marks a processed item as read.
+
 Inbox content is untrusted input. This script parses it; it never executes it.
 
 Exit codes: 0 ran (per-item failures are recorded on the items), 2 bad arguments,
@@ -64,6 +67,8 @@ def load_events(inbox: Path) -> list[dict]:
                 raise ValueError("missing url or capturedAt")
             ev.setdefault("action", "capture")
             ev.setdefault("source", "unknown")
+            if ev["action"] not in ("capture", "remove", "done"):
+                raise ValueError(f"unknown action {ev['action']!r}")
             ev["_path"] = path
             events.append(ev)
         except Exception as e:  # noqa: BLE001
@@ -243,6 +248,29 @@ def capture_record(ev: dict) -> dict:
 
 # ---------- run ----------
 
+def apply_done(store: Store, events: list[dict]) -> list[dict]:
+    """`done` events mark an existing item as read. Returns the other events. A done for an unknown URL is dropped with a note."""
+    rest = []
+    for ev in events:
+        if ev["action"] != "done":
+            rest.append(ev)
+            continue
+        canonical = canonicalize(ev["url"])
+        found = store.get(canonical)
+        if found and found[1]["status"] not in ("archived",):
+            folder, item = found
+            if item["status"] != "done":
+                item["status"] = "done"
+                item["doneAt"] = ev["capturedAt"]
+                store.save(folder, item)
+                store.feedback({"item": folder, "action": "done", "reason": f"marked via {ev.get('source', '?')}", "at": now()})
+            print(f"done      items/{folder}", file=sys.stderr)
+        else:
+            print(f"dropped   {ev['_path'].name}  done for an unknown or archived item  {canonical}", file=sys.stderr)
+        ev["_path"].unlink(missing_ok=True)
+    return rest
+
+
 def apply_removals(store: Store, events: list[dict]) -> dict[str, list[dict]]:
     """Group by canonical URL. Per URL the last event in time decides; a remove retracts everything before it."""
     groups: dict[str, list[dict]] = {}
@@ -298,7 +326,7 @@ def main(argv: list[str]) -> int:
         return 0
 
     ok = failed = 0
-    for canonical, evs in apply_removals(store, events).items():
+    for canonical, evs in apply_removals(store, apply_done(store, events)).items():
         found = store.get(canonical)
         item = found[1] if found else {"url": canonical, "title": first_title(evs), "status": "captured", "mustRead": False, "captures": []}
         if found or len(evs) > 1:

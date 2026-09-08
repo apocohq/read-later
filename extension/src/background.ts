@@ -113,7 +113,8 @@ async function capture(opts: { mustRead: boolean; note?: string }): Promise<void
 }
 
 /** Retract: tell the agent to drop or archive the item, and forget it locally. */
-async function remove(): Promise<void> {
+/** Send a `remove` or `done` event for the current tab. Both take the page out of the local saved list. */
+async function sendAction(action: "remove" | "done"): Promise<void> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id || !tab.url) return;
   const settings = await loadSettings();
@@ -126,7 +127,7 @@ async function remove(): Promise<void> {
   const stopBusy = startBusy(tab.id);
   try {
     const id = newId();
-    const event: BrowserCapture = { id, action: "remove", source: "browser", url: tab.url, mustRead: false, capturedAt: new Date().toISOString() };
+    const event: BrowserCapture = { id, action, source: "browser", url: tab.url, mustRead: false, capturedAt: new Date().toISOString() };
     await fromSettings(settings).uploadFile({
       agentId: settings.agentId,
       path: inboxPath(settings, id),
@@ -138,7 +139,7 @@ async function remove(): Promise<void> {
     await showState("default", tab.id);
   } catch (err) {
     await stopBusy();
-    console.error("[read-later] remove failed", err);
+    console.error(`[read-later] ${action} failed`, err);
     await showState("error", tab.id);
     setTimeout(() => void reflectSaved(tab.id!, tab.url), 5000);
   } finally {
@@ -146,7 +147,8 @@ async function remove(): Promise<void> {
   }
 }
 
-/** Left click toggles: send to the queue when new, remove when already saved. */
+const remove = () => sendAction("remove");
+
 async function toggle(): Promise<void> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.url) return;
@@ -159,6 +161,7 @@ function installMenus(): void {
     const contexts: chrome.contextMenus.ContextType[] = ["page", "link", "selection", "action"];
     chrome.contextMenus.create({ id: "capture", title: "Read later", contexts });
     chrome.contextMenus.create({ id: "capture-must-read", title: "Read later (must read)", contexts });
+    chrome.contextMenus.create({ id: "done", title: "Mark as read", contexts });
     chrome.contextMenus.create({ id: "remove", title: "Remove from Read Later", contexts });
   });
 }
@@ -174,5 +177,6 @@ chrome.action.onClicked.addListener(() => void toggle());
 chrome.commands.onCommand.addListener((cmd) => void capture({ mustRead: cmd === "capture-must-read" }));
 chrome.contextMenus.onClicked.addListener((info) => {
   if (info.menuItemId === "remove") return void remove();
+  if (info.menuItemId === "done") return void sendAction("done");
   void capture({ mustRead: info.menuItemId === "capture-must-read", note: info.linkUrl ? `link: ${info.linkUrl}` : undefined });
 });

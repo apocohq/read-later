@@ -22,7 +22,7 @@ Written by producers (today: the Chrome extension), read only by `scripts/ingest
 | field | required | meaning |
 |---|---|---|
 | `id` | yes | unique, time-sortable, also the filename |
-| `action` | no | `capture` (default) or `remove` = retract earlier captures of this URL |
+| `action` | no | `capture` (default); `remove` = retract earlier captures of this URL (drop if unprocessed, archive if processed); `done` = the reader finished it |
 | `source` | yes | `browser`; other producers may add their own value |
 | `url` | yes | as seen; canonicalization happens here, not in the producer |
 | `title` | no | page title |
@@ -61,7 +61,7 @@ The folder is `<first capture time>-<title slug>`, e.g. `2026-09-07T13-00-00Z-ru
 |---|---|
 | `url` | canonical URL, the item's identity |
 | `title` | from extraction, else from the capture |
-| `status` | `captured` → `extracted` \| `failed` (adds `failure`) → `archived` |
+| `status` | `captured` → `extracted` \| `failed` (adds `failure`) → `analyzed` → `done` (adds `doneAt`) \| `archived` |
 | `mustRead` | true once any capture said so; never reset |
 | `captures[]` | one per capture: `at`, `source`, and only the user's signals if present: `note`, `selectedText`, `recommendedBy`, `sourceRef` |
 | `author`, `published` | when found. `published` is heuristic; treat as approximate |
@@ -90,6 +90,14 @@ A failed analysis leaves `status` unchanged and adds `analysisError: {at, messag
 
 Short frontmatter (`title`, `url`, `author`, `published`, when known), a blank line, then Markdown with headings, links, tables and images (absolute URLs). The full metadata lives in `item.json`.
 
+## Folders
+
+`items/` is the live pool and the only folder `rank` reads. `read-later-prune` moves whole item folders to `done/` (status `done`) or `archive/` (status `archived`, `not-an-article`, or unread for 30 days and not must-read). Nothing is deleted.
+
+## Reader context — `context.md`
+
+Written at setup. Either names where the reader's context lives (files or notes the agent should read before reweighing topics), or contains the line `NO CONTEXT AVAILABLE`. When missing or marked, `rank` skips reweighing and `prune` leaves new labels unweighted.
+
 ## Vocabulary — `topics.md`
 
 Two flat lists, seeded by `read-later-analyze` from its `references/topics.md`. `# Categories`: the shelves, one per item, hand-edited; also the analyzer's allowed values. `# Topics`: labels, `- label` or `- label: N` where N (0-10) is how much the reader cares now; unweighted counts as 5. The analyzer appends coined labels; `read-later-rank` reads the weights.
@@ -97,6 +105,10 @@ Two flat lists, seeded by `read-later-analyze` from its `references/topics.md`. 
 ## Queue — `queue.md`, `queue.json`
 
 Written by `read-later-rank`. Buckets `read_today`, `read_next`, `later`; each entry carries `item`, `title`, `url`, `priority`, `relevance`, `quality`, `minutes`, `tldr`, `category`, `topics`, `notes`. Generated files: change the weights or the script, not these.
+
+## Delivery — `queue.html`, `deliver.json`
+
+`read-later-deliver` renders `queue.html` from `queue.json` and keeps `deliver.json`: `{"contentHash": "…", "artifactId": "…"}`. The artifact id is the one queue artifact in the library; the hash lets an unchanged queue skip publishing.
 
 ## Log — `feedback.jsonl`
 

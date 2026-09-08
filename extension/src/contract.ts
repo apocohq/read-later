@@ -4,8 +4,8 @@
  */
 export interface BrowserCapture {
   id: string;
-  /** `remove` retracts an earlier capture of the same URL. */
-  action: "capture" | "remove";
+  /** `remove` retracts an earlier capture of the same URL; `done` marks it as read. */
+  action: "capture" | "remove" | "done";
   source: "browser";
   url: string;
   title?: string;
