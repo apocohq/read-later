@@ -114,7 +114,7 @@ Known gaps from that run: the analyzer put KubeStellar under `ai-and-agents` whe
 
 1. Set a first pass of topic weights, or move to an agent that knows you (Guido) and point `context.md` at its memory files so the nightly reweigh does it.
 2. Point the extension at that agent (new key bound to it) and use *Mark as read* for a week; check that `done/` fills and Tonight changes.
-3. Feed what you finish reading back into the weights (topics of `done/` items drift up; highlighted items more so).
+3. Feed what you finish reading back into the weights (topics of `done/` items drift up).
 4. When DAM's artifact bridge ships: the page sends the highlight event itself, on every change. One transport function in the template, nothing on the agent.
 5. Slack as a second producer; the multi-user template; a name.
 

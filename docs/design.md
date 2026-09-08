@@ -41,7 +41,7 @@ Steps: `ingest.py` (1 to 3), `analyze.mjs` (4), `rank.py` (5 to 7):
 - **Actions** come from the extension: **Mark as read** (`done`) and **Remove** (`remove` → archived), both plain inbox events. Weekly `prune` moves `done/` and `archive/` folders out of the pool.
 - **Highlights** are made in the artifact's reader pane and anchored as W3C text quotes (exact, prefix, suffix) plus character offsets, so they re-attach to the article after any republish. Live state stays in the browser (localStorage per item) while reading; the agent receives one `highlight` or `done` event carrying the item's full current set, and ingest writes it to `items/<folder>/highlights.json`, which the renderer bakes back into the page. Every upload wakes the agent, so highlights travel in batches, not one by one. Transport today: the page copies the event JSON and the reader pastes it into chat. Later: the artifact bridge posts the same event, and the page could then push on every change, which makes highlights cross-device while reading. The agent side is the same under both.
 - **Reader context** enters through topic weights only: `rank` reweighs them each run from the context sources named in `context.md`, or skips when the file says `NO CONTEXT AVAILABLE`.
-- Later: highlights as a ranking signal (topics of highlighted items drift up more than plain done items), a reader view per item, audio rendition, e-ink.
+- Later: a reader view per item, audio rendition, e-ink.
 
 ## Runtime and cost
 
