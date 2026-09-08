@@ -92,7 +92,7 @@ Known gaps from that run: the analyzer put KubeStellar under `ai-and-agents` whe
 - Extension: new **Mark as read** menu → `action: "done"`; ingest sets status `done`. Un-bookmark stays `remove` → `archived`.
 - `read-later-prune` (weekly): moves `done` → `done/`, `archived`/not-an-article/unread-30-days → `archive/`; the agent then weighs new labels and merges duplicates in `topics.md`.
 - Reweighing moved into `read-later-rank`, every run: read `context.md` (pointer to the reader's context, or `NO CONTEXT AVAILABLE` → skip), adjust weights, then rank.
-- Schedules: `read-later-daily` at 18:00 Prague (ingest → analyze → rank → deliver), `read-later-prune` weekly. The old `daily` schedule is gone.
+- Schedules: `read-later-refresh` at 18:00 Prague (ingest → analyze → rank → deliver; named for what it does, the cadence can change), `read-later-prune` weekly. The old `daily` schedule is gone.
 - `INSTALL.md` at the repo root: the whole setup for a new agent, tested by creating a fresh agent with the CLI and following it.
 
 ## Not in scope yet
