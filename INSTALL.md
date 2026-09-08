@@ -25,7 +25,7 @@ One agent, five skills, one Chrome extension, two schedules. About fifteen minut
 ## 1. Install the skills
 
 ```sh
-dam skill source add https://github.com/apocohq/read-later          # once per DAM account
+dam skill source add https://github.com/apocohq/read-later          # once per DAM account; "already registered" means it is done
 for s in ingest analyze rank deliver prune; do
   dam skill install <agent> --source https://github.com/apocohq/read-later --name read-later-$s
 done
