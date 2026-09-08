@@ -17,7 +17,7 @@ Scoring, per item, all on a 0-10 scale:
     excluded: archived or done items, items without analysis, `not-an-article`,
               news/announcements published more than 14 days ago.
 
-Buckets: the top item is "Read today", the next N "Read next", the rest "Later".
+Buckets: the top 3 are "Read today", the next 4 "Read next", the rest "Later".
 Writes STATE_DIR/queue.json (the order and buckets read-later-deliver renders) and prints a short text view.
 Exit codes: 0 ran, 2 bad arguments, 3 STATE_DIR not usable.
 """
@@ -111,7 +111,7 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="rank.py", description="Rank analyzed read-later items into tonight's queue (deterministic, no model).",
                                  epilog="Exit codes: 0 ran, 2 bad arguments, 3 STATE_DIR not usable.")
     ap.add_argument("state_dir", metavar="STATE_DIR")
-    ap.add_argument("--today", type=int, default=1, help="items in Read today (default 1)")
+    ap.add_argument("--today", type=int, default=3, help="items in Read today (default 3)")
     ap.add_argument("--next", dest="next_", type=int, default=4, help="items in Read next (default 4)")
     ap.add_argument("--json", action="store_true", help="print queue.json to stdout instead of the text view")
     args = ap.parse_args(argv)

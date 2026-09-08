@@ -31,7 +31,7 @@ Steps: `ingest.py` (1 to 3), `analyze.mjs` (4), `rank.py` (5 to 7):
 4. analyze in an ephemeral DAM Invocation holding only the model connection: TL;DR, key claims, content type, category, topics, hard-won and grounded (0-10 with reasons). Article-only, so it never goes stale; result schema-validated by the platform; article text is data, not prompt. Rubric in the skill, overrides and the topic vocabulary in the state dir;
 5. relevance from **topic weights** in `topics.md` (the reader's interests, edited by hand or by the host agent from its memory), not from a per-article model judgment: when focus shifts, a few numbers change and the whole pool re-ranks for free;
 6. exclude archived, not-an-article, and news older than 14 days;
-7. priority = ½ relevance + ½ quality (mean of hard-won and grounded), −1 for long reads, +3 for must-read; one Read today, four Read next, the rest Later. Deterministic and explainable.
+7. priority = ½ relevance + ½ quality (mean of hard-won and grounded), −1 for long reads, +3 for must-read; three Read today, four Read next, the rest Later. Deterministic and explainable.
 
 `items/<time>-<slug>/content.md` is text, tables and images with frontmatter (title, url, author, published, words). Every consumption surface, including future audio and e-ink, renders from this file.
 

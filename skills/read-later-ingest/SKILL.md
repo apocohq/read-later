@@ -36,6 +36,16 @@ uv run scripts/ingest.py ~/work/read-later
 3. **Extract.** Captured HTML → readability + markdownify → Markdown with headings, links, tables and images; title, author and date via trafilatura. Fallback: fetch the URL. Fallback: the event's own `text`. Under 80 words counts as failure.
 4. **Save.** `items/<capturedAt>-<title slug>/item.json` and `content.md`. The HTML is not kept. The inbox file is deleted.
 
+## Marking an item as read or removing it from chat
+
+The extension sends `done` and `remove` events. When the reader tells you in chat that they finished or want to drop an article, do the same thing: write one event file into `~/work/read-later/inbox/` and run the script.
+
+```bash
+printf '{"id":"%s","action":"done","source":"chat","url":"%s","capturedAt":"%s"}' "$(date -u +%Y-%m-%dT%H-%M-%S-000Z)-chat" "<the item url>" "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" > ~/work/read-later/inbox/$(date -u +%Y-%m-%dT%H-%M-%S)-chat.json
+```
+
+Use `"action":"remove"` to drop instead. Never edit `item.json` by hand for this; the event keeps `feedback.jsonl` honest.
+
 ## Files
 
 See [references/contract.md](references/contract.md) for the inbox event, `item.json` and `content.md` shapes.

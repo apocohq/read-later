@@ -1,6 +1,6 @@
 ---
 name: read-later-rank
-description: Reweighs the reader's topic interests from their context, then ranks analyzed read-later items into tonight's queue (one Read today, a few Read next, the rest Later) from topic weights and article scores. Use when asked what to read, to build or refresh the read-later queue, or after read-later-analyze has run.
+description: Reweighs the reader's topic interests from their context, then ranks analyzed read-later items into tonight's queue (three picks for tonight, a few for next, the rest later) from topic weights and article scores. Use when asked what to read, to build or refresh the read-later queue, or after read-later-analyze has run.
 compatibility: Python 3.11+, standard library only.
 metadata:
   version: "0.1"
@@ -22,7 +22,7 @@ From this skill's directory:
 python3 scripts/rank.py ~/work/read-later
 ```
 
-Per item: `relevance` = mean of the two highest topic weights among its topics (unweighted topics count 5); `quality` = mean of hard-won and grounded; `priority` = half of each, minus 1 for articles over 4000 words, plus 3 for must-read. Excluded: archived, unanalyzed, `not-an-article`, and news or announcements older than 14 days. Top item is **Read today**, the next four **Read next**, the rest **Later**.
+Per item: `relevance` = mean of the two highest topic weights among its topics (unweighted topics count 5); `quality` = mean of hard-won and grounded; `priority` = half of each, minus 1 for articles over 4000 words, plus 3 for must-read. Excluded: archived, unanalyzed, `not-an-article`, and news or announcements older than 14 days. The top three are **Read today**, the next four **Read next**, the rest **Later**.
 
 ## Before ranking: reweigh the topics
 
@@ -36,7 +36,7 @@ Then run the script.
 
 ## After the run
 
-Report: which weights you changed and why (one line each, or "no context, weights unchanged"), then the queue as the script printed it: the Read today item with its TL;DR and why it ranked first, the Read next titles in one line each, and the count in Later. Do not open articles, do not re-summarize, do not override the order by hand.
+Report: which weights you changed and why (one line each, or "no context, weights unchanged"), then the queue as the script printed it: the Read today picks with one line each and why the first ranked first, the Read next titles in one line each, and the count in Later. Do not open articles, do not re-summarize, do not override the order by hand.
 
 ## Rules
 

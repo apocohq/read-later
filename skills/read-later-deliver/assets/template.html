@@ -52,11 +52,11 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 .cover .title{font-size:15px;line-height:1.25;font-weight:600;text-wrap:balance;text-shadow:0 1px 2px rgba(0,0,0,.25);display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
 .cover .foot{font-size:11px;opacity:.9;display:flex;justify-content:space-between;gap:6px}
 .under{display:flex;flex-direction:column;gap:6px;padding:0 2px}
-.bars{display:grid;grid-template-columns:auto 1fr;gap:3px 8px;align-items:center;font-size:10.5px;color:var(--ink3)}
-.bar{height:3px;background:var(--line);border-radius:2px;overflow:hidden}
-.bar i{display:block;height:100%;background:var(--ink2);border-radius:2px}
-.bar.hw i{background:var(--accent)}.bar.gr i{background:var(--accent2)}.bar.rl i{background:var(--ink2)}
-.under .t{font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bars{display:grid;grid-template-columns:auto 1fr auto;gap:4px 8px;align-items:center;font-size:10.5px;color:var(--ink3)}
+.bars .v{font-variant-numeric:tabular-nums;color:var(--ink2);min-width:1.6em;text-align:right}
+.bar{display:grid;grid-template-columns:repeat(10,1fr);gap:2px;height:5px}
+.bar i{display:block;background:var(--line);border-radius:1px}
+.bar i.on{background:var(--ink2)}.bar.hw i.on{background:var(--accent)}.bar.gr i.on{background:var(--accent2)}
 
 /* reader */
 .reader{position:fixed;inset:0;background:rgba(20,16,12,.55);display:none;align-items:stretch;justify-content:flex-end;z-index:10}
@@ -76,7 +76,7 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 .score{border:1px solid var(--line);border-radius:8px;padding:12px 14px}
 .score .n{display:flex;justify-content:space-between;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
 .score .n b{color:var(--ink);font-size:14px;letter-spacing:0}
-.score .bar{margin:8px 0}.score p{margin:0;font-size:13px;color:var(--ink2)}
+.score .bar{margin:8px 0;height:6px}.score p{margin:0;font-size:13px;color:var(--ink2)}
 .tags{display:flex;gap:6px;flex-wrap:wrap}.tag{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:2px 9px;color:var(--ink2)}
 .divider{display:flex;align-items:center;gap:12px;color:var(--ink3);font-size:12px;letter-spacing:.12em;text-transform:uppercase}
 .divider::before,.divider::after{content:"";flex:1;border-top:1px solid var(--line)}
@@ -110,7 +110,6 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
   <section class="shelf" id="s-read_today"><h2>Tonight <small id="n-read_today"></small></h2><div class="grid"></div></section>
   <section class="shelf" id="s-read_next"><h2>Next <small id="n-read_next"></small></h2><div class="grid"></div></section>
   <section class="shelf" id="s-later"><h2>Later <small id="n-later"></small></h2><div class="grid"></div></section>
-  <p class="note">Tiles are the articles you saved, ordered by how much you care about their topics and how much substance they have. Click one to read it here. Marking as read or removing happens from the browser extension.</p>
 </main>
 
 <div class="reader" id="reader" role="dialog" aria-modal="true" aria-labelledby="r-title">
@@ -126,7 +125,8 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const domain = u => { try { return new URL(u).hostname.replace(/^www\./,''); } catch { return u; } };
   const colors = cat => { const [h,s] = HUES[cat] || HUES.other; return `--c1:hsl(${h} ${s}% 34%);--c2:hsl(${(h+18)%360} ${Math.max(20,s-10)}% 22%)`; };
-  const pct = v => Math.max(0, Math.min(100, (Number(v)||0) * 10));
+  const slots = v => { const n = Math.round(Math.max(0, Math.min(10, Number(v)||0))); return Array.from({length:10}, (_,i) => `<i class="${i < n ? 'on' : ''}"></i>`).join(''); };
+  const num = v => v == null ? '–' : (Number.isInteger(Number(v)) ? String(v) : Number(v).toFixed(1));
 
   document.getElementById('sub').textContent = `${items.length} saved · generated ${(DATA.generatedAt||'').replace('T',' ').replace(/:\d\d(\.\d+)?Z$/,' UTC')}`;
 
@@ -140,11 +140,10 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
       </div>
       <div class="under">
         <div class="bars">
-          <span>relevance</span><div class="bar rl"><i style="width:${pct(it.relevance)}%"></i></div>
-          <span>hard-won</span><div class="bar hw"><i style="width:${pct(it.hardWon&&it.hardWon.score)}%"></i></div>
-          <span>grounded</span><div class="bar gr"><i style="width:${pct(it.grounded&&it.grounded.score)}%"></i></div>
+          <span>relevance</span><div class="bar rl">${slots(it.relevance)}</div><span class="v">${num(it.relevance)}</span>
+          <span>hard-won</span><div class="bar hw">${slots(it.hardWon&&it.hardWon.score)}</div><span class="v">${num(it.hardWon&&it.hardWon.score)}</span>
+          <span>grounded</span><div class="bar gr">${slots(it.grounded&&it.grounded.score)}</div><span class="v">${num(it.grounded&&it.grounded.score)}</span>
         </div>
-        <div class="t">${esc((it.topics||[]).join(' · '))}</div>
       </div>`;
     b.addEventListener('click', () => open(it));
     return b;
@@ -193,7 +192,7 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 
   const reader = document.getElementById('reader'), pane = document.getElementById('pane');
   function open(it){
-    const sc = (k, label) => { const s = it[k] || {}; return `<div class="score"><div class="n"><span>${label}</span><b>${esc(s.score ?? '–')}<span style="color:var(--ink3);font-size:11px"> /10</span></b></div><div class="bar ${k==='hardWon'?'hw':'gr'}"><i style="width:${pct(s.score)}%"></i></div><p>${esc(s.reason||'')}</p></div>`; };
+    const sc = (k, label) => { const s = it[k] || {}; return `<div class="score"><div class="n"><span>${label}</span><b>${esc(s.score ?? '–')}<span style="color:var(--ink3);font-size:11px"> /10</span></b></div><div class="bar ${k==='hardWon'?'hw':'gr'}">${slots(s.score)}</div><p>${esc(s.reason||'')}</p></div>`; };
     pane.innerHTML = `
       <div class="head">
         <div class="mini" style="${colors(it.category)}"></div>
@@ -212,7 +211,7 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
         ${(it.keyClaims||[]).length ? `<ul class="claims">${it.keyClaims.map(c=>`<li>${esc(c)}</li>`).join('')}</ul>` : ''}
         <div class="scores">
           ${sc('hardWon','hard-won')}${sc('grounded','grounded')}
-          <div class="score"><div class="n"><span>relevance</span><b>${esc(it.relevance ?? '–')}<span style="color:var(--ink3);font-size:11px"> /10</span></b></div><div class="bar rl"><i style="width:${pct(it.relevance)}%"></i></div><p>From the weights of its topics in topics.md. Priority ${esc(it.priority)}${(it.notes||[]).length ? ' · '+esc(it.notes.join(', ')) : ''}.</p></div>
+          <div class="score"><div class="n"><span>relevance</span><b>${esc(it.relevance ?? '–')}<span style="color:var(--ink3);font-size:11px"> /10</span></b></div><div class="bar rl">${slots(it.relevance)}</div><p>From the weights of its topics in topics.md. Priority ${esc(it.priority)}${(it.notes||[]).length ? ' · '+esc(it.notes.join(', ')) : ''}.</p></div>
         </div>
         <div class="tags">${(it.topics||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>
         <div class="divider">The article</div>
