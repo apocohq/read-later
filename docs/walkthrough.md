@@ -97,8 +97,18 @@ Known gaps from that run: the analyzer put KubeStellar under `ai-and-agents` whe
 
 **Tested on a fresh agent (2026-09-08):** `read-later-test` was created with the CLI and set up by following INSTALL.md step by step (model connection, network preset, five skills, `context.md` with `NO CONTEXT AVAILABLE`, the three test articles seeded into the inbox, both schedules). One scheduled run did ingest (3 extracted) → analyze (3 Invocations, scores 8/7, 8/7, 5/7, three topics coined) → rank (reweigh skipped on the marker, KubeStellar in Read today on the tie-break) → deliver (artifact `Read later` created, version 1, id stored in `deliver.json`). The agent reported and stopped. One correction to INSTALL.md came out of it: the CLI has no `--weekly`, the prune schedule uses `--daily 09:00 --weekdays SU`. Still open from this run: the analyzer put both the Uber and KubeStellar pieces under `ai-and-agents`; all weights are 5 until someone sets them.
 
-**Library page verified (2026-09-08 13:10 UTC):** after the redesign, a refresh on the test agent published version 2 of the same artifact (67 KB, `text/html`, three articles with full text). The two refreshes after it reported `changed: false` and did not republish.
+**Library page verified (2026-09-08):** after the redesign, a refresh on the test agent published version 2 of the same artifact (67 KB, `text/html`, three articles with full text). The two refreshes after it reported `changed: false` and did not republish. A second design pass (segmented 0-10 bars with the value beside them, no topic line under tiles, no footnote, Tonight holds three picks) went out as version 3.
 
-## Not in scope yet
+## Where things stand
 
-Slack sweep, feedback from what you read into the weights, multi-user template, name change, the artifact calling the agent back.
+- Steps 1-5 work end to end on two agents: `first-reader` (your bookmarks) and `read-later-test` (the INSTALL.md rehearsal). Both run `read-later-refresh` at 18:00 Prague and `read-later-prune` on Sundays.
+- Marking as read: *Mark as read* in the extension, or tell the agent in chat; either way it is a `done` event through ingest. The artifact cannot call the agent back until DAM ships its artifact bridge.
+- Open polish, all small: the analyzer files engineering-flavoured agent pieces under `ai-and-agents`; every topic weight is still 5 until you or the host agent sets them; `first-reader` has a stray `context.md` and `index.json` from earlier versions, harmless.
+
+## Next
+
+1. Set a first pass of topic weights, or move to an agent that knows you (Guido) and point `context.md` at its memory files so the nightly reweigh does it.
+2. Point the extension at that agent (new key bound to it) and use *Mark as read* for a week; check that `done/` fills and Tonight changes.
+3. Feed what you finish reading back into the weights (topics of `done/` items drift up).
+4. Slack as a second producer; the multi-user template; a name.
+

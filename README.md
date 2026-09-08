@@ -1,6 +1,6 @@
 # read-later
 
-Bookmark a page in Chrome, and a DAM agent turns it into a clean article, then into a small ranked reading queue.
+Bookmark a page in Chrome, and a DAM agent turns it into a clean article, scores it, and shelves it in a small ranked library you read from one page.
 
 ```
 Chrome extension ─▶ inbox/<id>.json ─▶ ingest ─▶ items/ ─▶ analyze ─▶ rank ─▶ queue ─▶ deliver ─▶ one artifact
@@ -10,7 +10,15 @@ Chrome extension ─▶ inbox/<id>.json ─▶ ingest ─▶ items/ ─▶ analy
 - `extension/` — the Chrome extension. Setup in `extension/README.md`.
 - `skills/` — the agent skills, one per capability: `read-later-ingest` (inbox → articles), `read-later-analyze` (articles → TL;DR, category, topics, scores), `read-later-rank` (weights + scores → tonight's queue), `read-later-deliver` (queue → one artifact), `read-later-prune` (weekly housekeeping).
 - `INSTALL.md` — setting up an agent, end to end.
-- `docs/walkthrough.md` — where we are and what is next.
+- `docs/walkthrough.md` — how it was built, what was tested, what is next.
+- `docs/design.md` — the decisions behind it.
+
+## What you get
+
+- **The library**: one artifact in the DAM artifact library, updated in place. Book-shaped tiles on three shelves (Tonight: three picks, Next: four, Later: the rest), each with segmented 0-10 bars for relevance, hard-won and grounded. Click a tile for the TL;DR, key claims, the scores with their reasons, and the full article text.
+- **Analysis you can argue with**: every score carries a one-sentence reason from the text. The rubric is three prompt files; the category list and topic vocabulary are one editable file; your interests are weights on topics.
+- **Actions from where you read**: in Chrome, right-click for *Mark as read* or *Remove from Read Later*. In chat, tell the agent. The page itself is static.
+- **One unattended refresh a day** (`read-later-refresh`, 18:00 Prague) and one weekly tidy (`read-later-prune`). A refresh costs the agent one short turn plus one isolated model run per new article; the page is republished only when something changed.
 
 ## Install
 
