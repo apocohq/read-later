@@ -101,10 +101,13 @@ Known gaps from that run: the analyzer put KubeStellar under `ai-and-agents` whe
 
 **Second rehearsal (2026-09-08, `read-later-test2`):** a brand-new agent set up by following INSTALL.md again, this time with only the doc's chat phrase, *"ingest, analyze, rank and deliver read later"*, as the run's instruction. It passed: 3 ingested, 3 analyzed, 3 ranked, artifact created (version 1), report and stop. The skills carry the run without a detailed prompt. Two findings: `dam skill source add` errors when the source is already registered (documented), and a temporary `--every 10m` trigger keeps running until deleted, each tick a short agent turn that ends in "unchanged" (a note for testers, not for INSTALL.md).
 
+**Highlights verified on a temporary agent (2026-09-08):** `read-later-hl-test` was created fresh, the five skills copied from the `feat/highlights` branch, two captures seeded. One refresh turn (`claude -p` over SSH) did ingest → analyze → rank → deliver and created the artifact. A *Done reading* paste with two highlights produced from the published page (jsdom driving the template): the agent wrote `highlights.json` verbatim into the item folder and filed the `done` event through ingest. A *Copy for chat* paste on the unread KubeStellar item stored two highlights and left the status alone. Rank + deliver then published version 2 of the same artifact; loading that page in a fresh browser with no localStorage showed both highlights as synced marks, the note on hover. The done item left the queue as designed. Still unverified: localStorage persistence inside the DAM artifact iframe in a real browser.
+
 ## Where things stand
 
 - Steps 1-5 work end to end on two agents: `first-reader` (your bookmarks) and `read-later-test` (the INSTALL.md rehearsal). Both run `read-later-refresh` at 18:00 Prague and `read-later-prune` on Sundays.
 - Marking as read: *Mark as read* in the extension, or tell the agent in chat; either way it is a `done` event through ingest. The artifact cannot call the agent back until DAM ships its artifact bridge.
+- Highlights: the reader pane has a highlighter (toggle, select text, click a mark for a note or to remove it). Highlights stay in the browser until *Copy for chat* or *Done reading* puts the content of `highlights.json` on the clipboard and you paste it to the agent; the agent writes the file into the item folder verbatim (no ingest) and the next deliver shows them on every device. Until the bridge, that paste is the only path, so highlights made on one device reach another only after you have sent them.
 - Open polish, all small: the analyzer files engineering-flavoured agent pieces under `ai-and-agents`; every topic weight is still 5 until you or the host agent sets them; `first-reader` has a stray `context.md` and `index.json` from earlier versions, harmless.
 
 ## Next
@@ -112,5 +115,6 @@ Known gaps from that run: the analyzer put KubeStellar under `ai-and-agents` whe
 1. Set a first pass of topic weights, or move to an agent that knows you (Guido) and point `context.md` at its memory files so the nightly reweigh does it.
 2. Point the extension at that agent (new key bound to it) and use *Mark as read* for a week; check that `done/` fills and Tonight changes.
 3. Feed what you finish reading back into the weights (topics of `done/` items drift up).
-4. Slack as a second producer; the multi-user template; a name.
+4. When DAM's artifact bridge ships: the page sends the highlight event itself, on every change. One transport function in the template, nothing on the agent.
+5. Slack as a second producer; the multi-user template; a name.
 

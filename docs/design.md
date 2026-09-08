@@ -39,8 +39,9 @@ Steps: `ingest.py` (1 to 3), `analyze.mjs` (4), `rank.py` (5 to 7):
 
 - **Artifact (the surface).** `queue.html` is rendered by code from `queue.json`, so regenerating it costs no model tokens. Published once to the DAM artifact library and updated in place when the content hash changes, so it keeps one link and a version history. Artifacts are static pages in a sandboxed iframe; DAM's agent-calling bridge for interactive artifacts is planned, not built, so the page does not call back.
 - **Actions** come from the extension: **Mark as read** (`done`) and **Remove** (`remove` → archived), both plain inbox events. Weekly `prune` moves `done/` and `archive/` folders out of the pool.
+- **Highlights** are made in the artifact's reader pane and anchored as W3C text quotes (exact, prefix, suffix) plus character offsets, so they re-attach to the article after any republish. Live state stays in the browser (localStorage per item) while reading; the page produces the whole `items/<folder>/highlights.json` (the item's full current set) and the agent copies it into the folder verbatim, no ingest involved; the renderer bakes it back into the page. Transport today: the page copies the file to the clipboard and the reader pastes it into chat. Later: the artifact writes the file itself, on every change, which makes highlights cross-device while reading. Read state stays separate: **Done reading** adds one line and the agent files the usual `done` event.
 - **Reader context** enters through topic weights only: `rank` reweighs them each run from the context sources named in `context.md`, or skips when the file says `NO CONTEXT AVAILABLE`.
-- Later: a reader view per item, highlights, audio rendition, e-ink.
+- Later: a reader view per item, audio rendition, e-ink.
 
 ## Runtime and cost
 

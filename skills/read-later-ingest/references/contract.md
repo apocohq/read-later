@@ -86,6 +86,42 @@ The folder is `<first capture time>-<title slug>`, e.g. `2026-09-07T13-00-00Z-ru
 
 A failed analysis leaves `status` unchanged and adds `analysisError: {at, message}`; the next run retries it.
 
+## Highlights — `items/<folder>/highlights.json`
+
+Produced by the library page (`read-later-deliver`), not by ingest. The page keeps the reader's highlights in the browser and, on **Copy for chat** or **Done reading**, puts this file's exact content on the clipboard; the reader pastes it to the agent, and the agent writes it verbatim to `items/<item>/highlights.json` (or under `done/` if prune already moved the folder). Later the artifact writes the file itself. Absent until the reader highlights something; every paste replaces the whole file, so adding or removing a highlight later is another paste.
+
+```json
+{
+  "item": "2026-09-07T13-00-00Z-running-a-software-factory-efficiently-at-uber-scale",
+  "url": "https://uber.com/us/en/blog/efficient-software-factory",
+  "updatedAt": "2026-09-08T20:11:02.113Z",
+  "highlights": [
+    {
+      "id": "h-k3f9a2",
+      "exact": "70% of pull requests are merged within a day",
+      "prefix": "we found that ",
+      "suffix": ". The rest wait",
+      "start": 14210,
+      "end": 14254,
+      "note": "compare with ours",
+      "createdAt": "2026-09-08T20:03:11.000Z"
+    }
+  ]
+}
+```
+
+| field | meaning |
+|---|---|
+| `item` | the folder the file belongs in |
+| `url` | the item's canonical URL, a cross-check |
+| `highlights[].id` | chosen by the page, stable for the life of the highlight |
+| `exact`, `prefix`, `suffix` | the highlighted text and up to 32 characters around it: a W3C TextQuoteSelector, the anchor that survives re-rendering |
+| `start`, `end` | character offsets into the rendered article text: a W3C TextPositionSelector, the fast path and the tiebreaker when `exact` occurs twice |
+| `note` | optional, the reader's comment |
+| `createdAt` | when the highlight was made |
+
+`read-later-deliver` injects the file into the page, so highlights made on one device show on every device once the agent has the file. Marking the item read is separate: a `done` event through ingest, as from the extension or chat.
+
 ## Article — `items/<folder>/content.md`
 
 Short frontmatter (`title`, `url`, `author`, `published`, when known), a blank line, then Markdown with headings, links, tables and images (absolute URLs). The full metadata lives in `item.json`.
