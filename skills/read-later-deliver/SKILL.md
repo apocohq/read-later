@@ -1,6 +1,6 @@
 ---
 name: read-later-deliver
-description: Publishes the read-later queue as one artifact in the DAM artifact library, updating the same artifact each time the queue changes. Use after read-later-rank, when asked to publish or show the reading queue, or on the daily schedule.
+description: Publishes the read-later queue as one artifact in the DAM artifact library, updating the same artifact each time the queue changes, and stores highlights the reader pastes from that page. Use after read-later-rank, when asked to publish or show the reading queue, on the daily schedule, or when the reader pastes a "Read later highlights" JSON (highlights.json) or says they are done reading.
 compatibility: DAM agent with the platform artifact tools (create_artifact, update_artifact) on its MCP endpoint. Python 3.11+ for the renderer.
 metadata:
   version: "0.1"
@@ -18,13 +18,14 @@ In the reader pane the reader turns the highlighter on, selects text, and gets a
 
 ### When the reader pastes highlights
 
-The paste reads "My highlights, replace `items/<folder>/highlights.json` with this file:" followed by one JSON object with `item`, `url`, `updatedAt` and `highlights`. Do exactly that:
+The paste reads "Read later highlights, replace `items/<folder>/highlights.json` with this file:" followed by one JSON object with `item`, `url`, `updatedAt` and `highlights`. Do exactly that, nothing more:
 
 1. Check that `~/work/read-later/items/<item>/` exists. If prune already moved it, use `~/work/read-later/done/<item>/`. If neither exists, say so and stop.
 2. Write the JSON verbatim to `highlights.json` in that folder, replacing the previous file. Do not edit, reorder or summarize it; the page produced it and reads it back.
-3. Reply with one line: how many highlights the file holds, e.g. "saved 4 highlights". They show in the library page after the next deliver.
+3. Append one line to `~/work/read-later/feedback.jsonl`: `{"item": "<folder>", "action": "highlight", "reason": "<n> highlight(s) via paste", "at": "<now, ISO>"}`.
+4. Reply with one line: how many highlights the file holds, e.g. "saved 4 highlights". They show in the library page after the next deliver. Do not inspect, dedupe or comment on the highlights themselves.
 
-If the paste starts with "Done reading, mark it as read: <url>", also mark the item read the way `read-later-ingest` describes for chat: one `done` event into the inbox, then run its script. Highlights first, then done.
+If the paste starts with "Read later, done reading, mark it as read: <url>", also mark the item read the way `read-later-ingest` describes for chat: one `done` event into the inbox, then run its script. Highlights first, then done.
 
 ## Available scripts
 

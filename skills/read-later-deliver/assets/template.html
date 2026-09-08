@@ -310,8 +310,9 @@ mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
     const payload = (it, action) => {
       const hasFile = current(it).length || synced(it).length;
       const json = hasFile ? JSON.stringify(file(it), null, 2) : '';
-      if (action === 'done') return `Done reading, mark it as read: ${it.url}` + (json ? `\n\nMy highlights, replace items/${it.id}/highlights.json with this file:\n\n${json}` : '');
-      return `My highlights, replace items/${it.id}/highlights.json with this file:\n\n${json}`;
+      const fileLine = `Read later highlights, replace items/${it.id}/highlights.json with this file:\n\n${json}`;
+      if (action === 'done') return `Read later, done reading, mark it as read: ${it.url}` + (json ? `\n\n${fileLine}` : '');
+      return fileLine;
     };
     const transports = [
       async (text, action, ui) => { try { await navigator.clipboard.writeText(text); ui.toast(action === 'done' ? 'Copied. Paste it to your agent to finish this article.' : 'Copied. Paste it to your agent.'); } catch { ui.fallback(text); } return true; },
@@ -395,7 +396,7 @@ mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
     function removeOne(id){ closePop(); HL.remove(it, id); HL.unwrap(article, id); orphans = orphans.filter(o => o !== id); renderPanel(); }
     article.addEventListener('pointerup', () => {
       if (!hlOn) return;
-      setTimeout(() => { const h = HL.fromSelection(article); if (!h) return; HL.add(it, h); window.getSelection()?.removeAllRanges(); closePop(); if (!HL.applyOne(article, it, h)) orphans.push(h.id); renderPanel(); }, 0);
+      setTimeout(() => { const h = HL.fromSelection(article); if (!h) return; if (HL.current(it).some(x => x.exact === h.exact && x.start === h.start)){ window.getSelection()?.removeAllRanges(); return; } HL.add(it, h); window.getSelection()?.removeAllRanges(); closePop(); if (!HL.applyOne(article, it, h)) orphans.push(h.id); renderPanel(); }, 0);
     });
     article.addEventListener('click', e => {
       const m = e.target.closest('mark.hl'); if (!m) return;
