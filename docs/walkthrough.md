@@ -9,7 +9,7 @@ What works today, what is next. One step at a time, each step tested before the 
 ┌──────────────────────┐  HTTPS   ┌──────────────────┐  writes  ┌───────────────────────────┐
 │ page + selection     │ ───────▶ │ files.upload     │ ───────▶ │ ~/work/read-later/inbox/  │
 │ extension builds     │  API key │ checks key scope │  wakes   │   <id>.json               │
-│ one inbox event      │          │ refuses overwrite│  pod     │ (nothing reads it yet)    │
+│ one inbox event      │          │ refuses overwrite│  pod     │ read by read-later-ingest │
 └──────────────────────┘          └──────────────────┘          └───────────────────────────┘
 ```
 
@@ -21,12 +21,12 @@ Authorization: Bearer pk_…          # scope agents:operate, bound to the one a
 { agentId, path: "work/read-later/inbox/<id>.json", contentBase64, contentType: "application/json", overwrite: false }
 ```
 
-**The file** (`extension/src/contract.ts`, schema in `src/domain/capture.ts`)
+**The file** (`extension/src/contract.ts`; the authoritative description is `skills/read-later-ingest/references/contract.md`)
 
 ```json
 {
   "id": "2026-09-07T06-12-31-482Z-k3f9a",   // unique, time-sortable, also the filename
-  "action": "capture",                      // or "remove" = retract earlier capture of this url
+  "action": "capture",                      // "remove" = retract / archive, "done" = finished reading
   "source": "browser",
   "url": "https://…",                       // raw; the agent canonicalizes
   "title": "…",
@@ -55,7 +55,7 @@ skills/read-later-ingest/
 
 What `ingest.py` does per inbox file, in order:
 
-1. **Canonicalize + dedupe** — strip fragment, `www.`, tracking params. Same page twice = one item. `remove` events handled first.
+1. **Canonicalize + dedupe** — strip fragment, `www.`, tracking params. Same page twice = one item. `done` and `remove` events handled first (mark read / archive).
 2. **Extract** — captured HTML → readability → Markdown with images and tables; title/author/date via trafilatura. Fallback: fetch the URL. Fails visibly if neither yields ≥ 80 words.
 3. **Save** — `items/<time>-<slug>/item.json` + `content.md`, drop the html, delete the inbox file.
 
@@ -68,7 +68,7 @@ Tested locally on a real 211 KB capture: 2682 words extracted, duplicate capture
 Skill `read-later-analyze`. Decided in the grilling of 2026-09-07:
 
 - Analysis describes the **article only**, never the reader, so it runs once and never goes stale. Seven fields: `tldr` (2-4 sentences stating the claim), `keyClaims` (1-3), `contentType`, `category` (one shelf from a hand-edited list), `topics` (2-5 labels from a shared vocabulary, new ones coined only when the main subject has no match), `hardWon` and `grounded` (0-10 with a one-sentence reason, anchors at 0/5/10).
-- The reader's interests live in **`~/work/read-later/topics.md`** as weights on topics, not in a context file. Categories and topics are orthogonal: shelf vs labels.
+- The reader's interests live in **`~/work/read-later/topics.md`** as weights on topics. `context.md` only says where the agent should look to adjust them (or `NO CONTEXT AVAILABLE`). Categories and topics are orthogonal: shelf vs labels.
 - The judgment runs in an **ephemeral DAM Invocation** per article with the model connection only, spawned by `scripts/analyze.mjs` through the platform's `dam-invoke` SDK; the platform validates the result against a JSON Schema derived from the category list. Article text never enters the agent's session, and the evaluator has nothing to exfiltrate to.
 - Rubric in `prompts/{tldr,categorize,score}.md`; a copy in `~/work/read-later/prompts/` overrides.
 
@@ -78,7 +78,7 @@ node scripts/analyze.mjs --connection ibm-litellm ~/work/read-later
 
 ## Step 4 · Rank: tonight's queue  ✅ works
 
-Skill `read-later-rank`, `scripts/rank.py`, standard library only, no model. Per item: relevance = mean of the two highest topic weights among its topics; quality = mean of hard-won and grounded; priority = half of each, −1 for over 4000 words, +3 for must-read. Excludes archived, unanalyzed, not-an-article, and news older than 14 days. Top item = Read today, next four = Read next, rest = Later. Writes `queue.md` and `queue.json`. Changing a weight in `topics.md` and rerunning is the feedback loop.
+Skill `read-later-rank`. First the agent reweighs `topics.md` from the reader's context (skipped when `context.md` is missing or says `NO CONTEXT AVAILABLE`), then `scripts/rank.py`, standard library only, no model. Per item: relevance = mean of the two highest topic weights among its topics; quality = mean of hard-won and grounded; priority = half of each, −1 for over 4000 words, +3 for must-read. Excludes done, archived, unanalyzed, not-an-article, and news older than 14 days. Top item = Read today, next four = Read next, rest = Later. Writes `queue.md` and `queue.json`. Changing a weight in `topics.md` and rerunning is the feedback loop; the daily reweigh does it from context, you can do it by hand or in chat.
 
 Tested locally on the three test articles with a stub SDK: ingest → analyze (one injected failure, retried next run, coined topics appended to `topics.md`) → rank; raising `code-review` to 10 lifted the Fowler piece from third to second (its quality scores still keep it below the Uber piece).
 

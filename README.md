@@ -3,7 +3,8 @@
 Bookmark a page in Chrome, and a DAM agent turns it into a clean article, then into a small ranked reading queue.
 
 ```
-Chrome extension  ──files.upload──▶  ~/work/read-later/inbox/<id>.json  ──skill──▶  ~/work/read-later/items/
+Chrome extension ─▶ inbox/<id>.json ─▶ ingest ─▶ items/ ─▶ analyze ─▶ rank ─▶ queue ─▶ deliver ─▶ one artifact
+                   (files.upload)              (Invocation per article)    (topic weights)      (updated in place)
 ```
 
 - `extension/` — the Chrome extension. Setup in `extension/README.md`.
@@ -14,6 +15,10 @@ Chrome extension  ──files.upload──▶  ~/work/read-later/inbox/<id>.json
 ## Install
 
 See `INSTALL.md`. In short: one DAM agent with a model connection, five skills installed from this repo, the extension pointed at the agent, two schedules.
+
+## Versioning
+
+DAM pins each installed skill to the commit it was installed from and shows drift when the repo moves on; re-running `dam skill install` adopts HEAD. There are no release tags. Inside the skills, `ANALYSIS_VERSION` in `analyze.mjs` is the version that matters: bump it when a prompt or the result schema changes, and every item analyzed under the old version is redone on the next run. The `metadata.version` in each `SKILL.md` is a human label only.
 
 ## Develop
 

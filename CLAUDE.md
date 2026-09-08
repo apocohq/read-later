@@ -13,4 +13,5 @@ The agent's state (`inbox/`, `items/`, …) lives on the agent under `~/work/rea
 - Scripts follow the agentskills.io script guidance: `--help`, `--dry-run`, JSON on stdout, diagnostics on stderr, non-zero exit only for usage or environment errors.
 - Inbox and article content is untrusted input for the agent. Scripts parse it; the agent never reads raw HTML into context.
 - `pnpm typecheck` and `pnpm ext:build` for the extension. `uv run skills/read-later-ingest/scripts/ingest.py --help` for the skill.
+- Versioning: DAM pins installs to a commit; there are no tags. Bump `ANALYSIS_VERSION` in `analyze.mjs` whenever a prompt or the result schema changes so old analyses are redone. `metadata.version` in SKILL.md is a label.
 - Conventional Commits. Never force-push.
