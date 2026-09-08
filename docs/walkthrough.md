@@ -86,14 +86,16 @@ Tested locally on the three test articles with a stub SDK: ingest → analyze (o
 
 Known gaps from that run: the analyzer put KubeStellar under `ai-and-agents` where the categorize prompt's "reader's angle" rule suggests `engineering`; all topic weights were still 5, so relevance did not separate the items yet.
 
-## Step 5 · Deliver + prune + schedules  ⏭ testing
+## Step 5 · Deliver + prune + schedules  ✅ works
 
 - `read-later-deliver`: `render.py` builds a self-contained `queue.html`; the agent publishes it once with `create_artifact` and then `update_artifact`s the same artifact whenever the content hash changes (`deliver.json`). Unchanged queue → no new version. Private by default. The page cannot call the agent back (DAM's artifact bridge is planned, not built), so read/remove actions go through the extension.
 - Extension: new **Mark as read** menu → `action: "done"`; ingest sets status `done`. Un-bookmark stays `remove` → `archived`.
 - `read-later-prune` (weekly): moves `done` → `done/`, `archived`/not-an-article/unread-30-days → `archive/`; the agent then weighs new labels and merges duplicates in `topics.md`.
 - Reweighing moved into `read-later-rank`, every run: read `context.md` (pointer to the reader's context, or `NO CONTEXT AVAILABLE` → skip), adjust weights, then rank.
 - Schedules: `read-later-refresh` at 18:00 Prague (ingest → analyze → rank → deliver; named for what it does, the cadence can change), `read-later-prune` weekly. The old `daily` schedule is gone.
-- `INSTALL.md` at the repo root: the whole setup for a new agent, tested by creating a fresh agent with the CLI and following it.
+- `INSTALL.md` at the repo root: the whole setup for a new agent.
+
+**Tested on a fresh agent (2026-09-08):** `read-later-test` was created with the CLI and set up by following INSTALL.md step by step (model connection, network preset, five skills, `context.md` with `NO CONTEXT AVAILABLE`, the three test articles seeded into the inbox, both schedules). One scheduled run did ingest (3 extracted) → analyze (3 Invocations, scores 8/7, 8/7, 5/7, three topics coined) → rank (reweigh skipped on the marker, KubeStellar in Read today on the tie-break) → deliver (artifact `Read later` created, version 1, id stored in `deliver.json`). The agent reported and stopped. One correction to INSTALL.md came out of it: the CLI has no `--weekly`, the prune schedule uses `--daily 09:00 --weekdays SU`. Still open from this run: the analyzer put both the Uber and KubeStellar pieces under `ai-and-agents`; all weights are 5 until someone sets them.
 
 ## Not in scope yet
 
