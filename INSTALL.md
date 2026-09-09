@@ -8,7 +8,7 @@ The agent must exist on the **Claude Code** template and have two things only an
 
 - **A model connection.** Analysis runs in ephemeral Invocations that need exactly one model connection. Find its id with `dam connection list`, then `dam connection grant <agent> --connection <model-connection>`.
 - **Network access** for the first-run package downloads (PyPI) and for fetching pages the browser could not capture: `dam network apply-preset <agent> --preset all --yes`. The `trusted` preset also works, but then bookmarks that arrive without HTML fail unless their host is allowed; PDFs (arXiv papers, reports) are always fetched by the agent, so their hosts must be reachable.
-- **The Slack connection**, if links shared in Slack should be swept: `dam connection grant <agent> --connection slack`. It must be *your* Slack connection (`dam connection templates` → Slack, log in as yourself): the sweep searches as you, so it sees what you see, including your DMs and your saved messages. It only reads (two search tools, allowlisted in the script). Without the grant the refresh skips the sweep. See section D.
+- **The Slack connection**, if links shared in Slack should be swept: `dam connection grant <agent> --connection slack`. It must be *your* Slack connection (`dam connection templates` → Slack, log in as yourself): the sweep searches as you, so it sees what you see, including your DMs. It only reads (two search tools, allowlisted in the script). Without the grant the refresh skips the sweep. See section D.
 - A fresh agent, if you need one: `dam agent create <agent> --template claude-code`.
 
 The skill source must be registered once per DAM account: `dam skill source add https://github.com/apocohq/read-later` ("already registered" means it is done).
@@ -73,9 +73,8 @@ With the Slack connection granted (section 0) and `read-later-slack` installed, 
 
 Using it:
 
-- **Save for later** on any Slack message with a link (the bookmark icon in the message menu, on desktop or mobile). The next refresh captures it, no questions asked. This is the Slack equivalent of the extension's bookmark button.
-- **Send a link to yourself** (your own DM). Same effect.
-- Everything else with a link, in every channel and DM you are in, is judged by the agent: it captures what you would want to read and skips the rest. The refresh report lists its picks; tell the agent "also add what X posted in #channel" if it missed one, or **Remove from Read Later** in the extension if it picked wrong.
+- Every link shared in every channel and DM you are in is judged by the agent: it captures what you would want to read and skips the rest. The refresh report lists its picks; tell the agent "also add what X posted in #channel" if it missed one, or **Remove from Read Later** in the extension if it picked wrong.
+- To make sure something gets in, use **Save for later** on the message (the bookmark icon in the message menu, on desktop or mobile) or send the link to yourself in your own DM. The agent sees both as strong signals.
 - Links behind a login (Google Docs, Box, internal GitHub) and social posts cannot be fetched by the agent. The library page lists them under **Needs attention**; open them and save from the browser if you want them.
 - The first sweep looks back 7 days. Later sweeps continue from the last one. Slack rate-limits search, so a sweep can take a few minutes; the script waits and retries.
 

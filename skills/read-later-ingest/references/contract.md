@@ -23,7 +23,7 @@ Written by producers (the Chrome extension, `read-later-slack`, the agent from c
 |---|---|---|
 | `id` | yes | unique, time-sortable, also the filename |
 | `action` | no | `capture` (default); `remove` = retract earlier captures of this URL (drop if unprocessed, archive if processed); `done` = the reader finished it |
-| `source` | yes | `browser`; `chat` (the agent, on the reader's word); `slack` (agent-picked from the sweep's shortlist), `slack-saved` (the reader's Save-for-later), `slack-self` (the reader's own DM); other producers add their own value |
+| `source` | yes | `browser`; `chat` (the agent, on the reader's word); `slack` (the agent's pick from the sweep's shortlist); other producers add their own value |
 | `url` | yes | as seen; canonicalization happens here, not in the producer |
 | `title` | no | page title |
 | `selectedText`, `note` | no | the user's own signal why it matters |

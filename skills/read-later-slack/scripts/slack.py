@@ -4,14 +4,13 @@ Sweep Slack for links worth reading and turn them into read-later inbox events.
 
 Two commands:
 
-  sweep    STATE_DIR   Search Slack (the reader's saved messages, then every link shared
-                       since the last sweep) through the Slack MCP server. Messages the
-                       reader saved ("Save for later") or sent to themselves become inbox
-                       events at once. Every other link goes to a numbered shortlist,
-                       printed on stdout and kept in STATE_DIR/slack/shortlist.json, for
-                       the agent to judge. Links that cannot be fetched (login walls,
-                       social posts) are listed in STATE_DIR/slack/skipped.json for the
-                       library page.
+  sweep    STATE_DIR   Search Slack through the Slack MCP server: the reader's saved
+                       messages, then every link shared since the last sweep. Every link
+                       goes to a numbered shortlist, printed on stdout and kept in
+                       STATE_DIR/slack/shortlist.json, for the agent to judge; "saved by
+                       you" and "your own DM" are hints on the line, not decisions. Links
+                       that cannot be fetched (login walls, social posts) are listed in
+                       STATE_DIR/slack/skipped.json for the library page.
   capture  STATE_DIR --picks 1,4,7 | none
                        Write inbox events for the picked shortlist entries; remember the
                        rest as rejected so they are not shown again (unless someone else
@@ -322,8 +321,7 @@ def candidates(hits: list[dict], me: dict, known: set[str], seen: dict) -> tuple
             if kind == "drop" or url in known:
                 continue
             poster = "you" if hit.get("fromId") == me["id"] else hit.get("from", "someone")
-            explicit = bool(hit.get("saved")) or self_dm  # the reader asked for it: let ingest try even behind a login
-            if kind == "skip" and not explicit:
+            if kind == "skip":
                 if url not in seen and url not in {s["url"] for s in skipped}:
                     skipped.append({"url": url, "title": label, "reason": reason, "by": f"{poster} in {place}", "permalink": hit.get("permalink"), "at": iso(hit["ts"])})
                 continue
@@ -345,9 +343,7 @@ def candidates(hits: list[dict], me: dict, known: set[str], seen: dict) -> tuple
         if prior and not (prior.get("decision") == "rejected" and set(c["sharerIds"]) - set(prior.get("sharers", []))):
             continue
         c["recommendedBy"] = None if c["selfDm"] and c["sharers"] == ["you"] else f"{', '.join(c['sharers'])} in {c['place']}"
-        # A saved or self-sent message is a request; but a bare domain in it is rarely the thing to read, so that still goes to the shortlist.
-        p = urlsplit(c["url"])
-        c["auto"] = (c["saved"] or c["selfDm"]) and not (p.path in ("", "/") and not p.query)
+        c["hint"] = "saved by you" if c["saved"] else "your own DM" if c["selfDm"] else None
         kept.append(c)
     return kept, skipped
 
@@ -376,15 +372,8 @@ def cmd_sweep(args: argparse.Namespace) -> int:
     log(f"slack returned {len(saved)} saved and {len(recent)} recent messages with links")
 
     known = known_urls(root)
-    kept, skipped = candidates(saved + recent, me, known, seen)
-    auto = [c for c in kept if c["auto"]]
-    shortlist = [c for c in kept if not c["auto"]]
+    shortlist, skipped = candidates(saved + recent, me, known, seen)
     at = now()
-    for c in auto:
-        ev = event(c, "slack-saved" if c["saved"] else "slack-self")
-        write_event(root, ev, args.dry_run)
-        seen[c["url"]] = {"decision": "captured", "at": at, "sharers": c["sharerIds"], "how": ev["source"]}
-        print(json.dumps({"captured": c["url"], "how": ev["source"], "by": c["recommendedBy"]}) if args.json else f"captured   {c['url']}  ({'saved by you' if c['saved'] else 'your own DM'})")
     for s in skipped:
         seen[s["url"]] = {"decision": "skipped", "at": at, "sharers": [], "reason": s["reason"]}
         print(json.dumps({"skipped": s["url"], "reason": s["reason"]}) if args.json else f"skipped    {s['url']}  ({s['reason']})")
@@ -406,14 +395,14 @@ def cmd_sweep(args: argparse.Namespace) -> int:
             if c.get("title"):
                 head += f"  · {c['title']}"
             print(head)
-            meta = f"    {c['recommendedBy']} · {c['at'][:10]}" + (f" · {c['replies']} replies" if c.get("replies") else "")
+            meta = f"    {c['recommendedBy'] or 'you'} · {c['at'][:10]}" + (f" · {c['replies']} replies" if c.get("replies") else "") + (f" · {c['hint'].upper()}" if c.get("hint") else "")
             print(meta)
             if c.get("text"):
                 print(f"    “{c['text']}”")
             for x in c.get("context", []):
                 if x:
                     print(f"      ↳ {x}")
-    log(f"done: {len(auto)} captured, {len(skipped)} skipped, {len(shortlist)} shortlisted, {len(known)} urls already known")
+    log(f"done: {len(skipped)} skipped, {len(shortlist)} shortlisted, {len(known)} urls already known")
     return 0
 
 
