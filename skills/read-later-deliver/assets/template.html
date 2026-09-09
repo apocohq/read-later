@@ -229,6 +229,7 @@ mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
     const CTX = 32;
     const key = id => 'rl:hl:' + id;
     let storageOk = true;
+    const mem = {};  // fallback when localStorage is unavailable (opaque origin): highlights live as long as the page is open
     const TOMBSTONE_MS = 30 * 24 * 3600 * 1000;
     const cssEsc = v => (window.CSS && CSS.escape) ? CSS.escape(v) : String(v).replace(/["\\]/g, '\\$&');
     // Stored shape: {added: [highlight], deleted: [{id, at}]}. Anything else (older revisions of this page, damage) is normalized away.
@@ -236,8 +237,8 @@ mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       added: Array.isArray(v?.added) ? v.added.filter(h => h && typeof h.id === 'string' && typeof h.exact === 'string') : [],
       deleted: Array.isArray(v?.deleted) ? v.deleted.map(d => typeof d === 'string' ? {id: d, at: Date.now()} : d).filter(d => d && typeof d.id === 'string') : [],
     });
-    const load = it => { try { return normalize(JSON.parse(localStorage.getItem(key(it.id)) || 'null')); } catch { storageOk = false; return normalize(null); } };
-    const save = (it, st) => { try { localStorage.setItem(key(it.id), JSON.stringify(st)); storageOk = true; } catch { storageOk = false; } };
+    const load = it => { try { return normalize(JSON.parse(localStorage.getItem(key(it.id)) || 'null')); } catch { storageOk = false; return normalize(mem[key(it.id)]); } };
+    const save = (it, st) => { mem[key(it.id)] = st; try { localStorage.setItem(key(it.id), JSON.stringify(st)); storageOk = true; } catch { storageOk = false; } };
     const synced = it => it.highlights || [];
     // Reconcile with what the agent has: a local addition the agent now knows is synced. A deletion stays until the agent no
     // longer has the id (it may have been sent but not republished yet), and is forgotten after 30 days if it never shows up.
@@ -354,10 +355,12 @@ mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       </div>`;
     pane.querySelector('.close').addEventListener('click', close);
     reader.classList.add('open'); document.body.style.overflow = 'hidden'; pane.scrollTop = 0;
-    history.replaceState(null, '', '#'+encodeURIComponent(it.id||''));
     mountHighlights(it);
+    setHash('#'+encodeURIComponent(it.id||''));
   }
-  function close(){ reader.classList.remove('open'); document.body.style.overflow = ''; history.replaceState(null, '', location.pathname); closePop(); hlOn = false; }
+  function close(){ reader.classList.remove('open'); document.body.style.overflow = ''; setHash(''); closePop(); hlOn = false; }
+  // The artifact viewer renders this page in a sandboxed about:srcdoc frame (opaque origin) where History and Storage throw; both are conveniences here.
+  function setHash(h){ try { history.replaceState(null, '', h || location.pathname); } catch {} }
 
   // --- highlighter UI inside the reader ---
   let hlOn = false, pop = null;
@@ -380,7 +383,7 @@ mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
           <button class="chip" id="hl-done" title="Copy a done message, with the highlights, for your agent">Done reading</button>
         </div>
         ${list.length ? `<ul>${list.map(h => `<li><div class="q ${orphans.includes(h.id) ? 'orphan' : ''}" data-id="${esc(h.id)}" title="${orphans.includes(h.id) ? 'Not found in this text' : 'Show in the article'}">${esc(h.exact.length > 220 ? h.exact.slice(0, 220) + '…' : h.exact)}${h.note ? `<span class="nt">${esc(h.note)}</span>` : ''}</div><button class="x" data-id="${esc(h.id)}" aria-label="Remove highlight" title="Remove">×</button></li>`).join('')}</ul>` : `<p class="hint">${hlOn ? 'Select text in the article to highlight it. Click a highlight for a note or to remove it.' : 'Turn the highlighter on, then select text in the article.'}</p>`}
-        ${HL.storageOk() ? '' : '<p class="warn">This browser is not keeping highlights between visits. Copy them before you close the page.</p>'}
+        ${HL.storageOk() ? '' : '<p class="warn">This viewer does not keep highlights after the page closes or reloads. Use Copy for chat or Done reading before you leave.</p>'}
         <div class="copybox" id="copybox" hidden></div>`;
       panel.querySelector('#hl-toggle').addEventListener('click', () => { hlOn = !hlOn; closePop(); renderPanel(); article.classList.toggle('hl-on', hlOn); });
       panel.querySelector('#hl-copy').addEventListener('click', () => HL.emit(it, 'highlight', ui));
