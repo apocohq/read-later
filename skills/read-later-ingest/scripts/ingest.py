@@ -4,6 +4,7 @@
 #   "readability-lxml>=0.8,<1",
 #   "lxml_html_clean>=0.4",
 #   "markdownify>=1.1,<2",
+#   "pymupdf4llm>=1.28,<2",
 #   "trafilatura>=2.0,<3",
 # ]
 # ///
@@ -22,6 +23,9 @@ Dedup key is the canonical `url` inside each item.json; there is no separate ind
 
 Events: `capture` (default) adds a page; `remove` retracts earlier captures of the same URL
 (drops unprocessed ones, archives a processed item); `done` marks a processed item as read.
+
+Content: captured HTML → readability; else fetch the URL, which may be HTML or a PDF (PyMuPDF layout
+→ Markdown with headings and tables, no OCR, no images); else the event's own `text`.
 
 Failed extractions are retried on later runs by fetching the URL again: at most RETRY_MAX
 attempts, at least RETRY_AFTER_HOURS apart, recorded as `attempts` and `failedAt` on the item.
@@ -51,6 +55,7 @@ from readability import Document
 
 MIN_WORDS = 80
 FETCH_TIMEOUT = 20
+FETCH_MAX = 40_000_000  # a paper with figures runs to tens of MB
 USER_AGENT = "Mozilla/5.0 (compatible; read-later/0.2)"
 TRACKING = re.compile(r"^(utm_|fbclid$|gclid$|mc_|ref$|source$|si$)")
 SLUG_MAX = 60
@@ -170,23 +175,119 @@ def clean_author(value: str | None) -> str | None:
     return value
 
 
-def fetch(url: str) -> str | None:
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,*/*"})
+# ---------- pdf ----------
+
+PDF_DATE = re.compile(r"D:(\d{4})(\d{2})(\d{2})")
+HEADING = re.compile(r"^(#{1,6} .*)$", re.M)
+# HTML pages that describe a PDF, when the host has one: arXiv's abstract page carries the real title, authors and date.
+LANDING_PAGES = [(re.compile(r"^https?://arxiv\.org/pdf/([\w.\-/]+?)(?:v\d+)?(?:\.pdf)?$"), "https://arxiv.org/abs/{}")]
+
+
+def extract_pdf(data: bytes, extracted_by: str) -> dict | None:
+    """Markdown via pymupdf4llm: headings and paragraphs from PyMuPDF's layout model, tables as pipe tables.
+
+    Deterministic and offline: OCR off, images dropped, running heads and page numbers removed.
+    """
+    try:
+        import pymupdf  # noqa: PLC0415  heavy import (onnxruntime); only PDFs pay for it
+        import pymupdf4llm  # noqa: PLC0415
+
+        doc = pymupdf.open(stream=data, filetype="pdf")
+        md = pymupdf4llm.to_markdown(doc, use_ocr=False, header=False, footer=False, show_progress=False)
+    except Exception as e:  # noqa: BLE001
+        print(f"pdf extraction failed: {e}", file=sys.stderr)
+        return None
+    md = HEADING.sub(lambda m: m.group(1).replace("**", "").rstrip(), md)  # the layout model bold-wraps headings
+    md = re.sub(r"\n{3,}", "\n\n", md).strip()
+    words = len(md.split())
+    if words < MIN_WORDS:
+        return None
+    meta = doc.metadata or {}
+    first_heading = re.search(r"^# (.+)$", md, re.M)
+    created = PDF_DATE.match(meta.get("creationDate") or "")
+    return {
+        "title": clean_title(first_heading.group(1) if first_heading else None) or clean_title(meta.get("title")),
+        "author": clean_author(meta.get("author")),
+        "published": "-".join(created.groups()) if created else None,
+        "words": words,
+        "images": 0,
+        "pages": doc.page_count,
+        "extractedBy": extracted_by,
+        "extractedAt": now(),
+        "markdown": md,
+    }
+
+
+def clean_title(value: str | None) -> str | None:
+    """PDF title fields are often the source filename ('acmmv2', 'paper.docx'); a real title has words."""
+    value = (value or "").strip()
+    return value if len(value) >= 8 and " " in value and len(value) <= 300 else None
+
+
+def landing_page(url: str) -> str | None:
+    for pat, template in LANDING_PAGES:
+        if m := pat.match(url):
+            return template.format(m.group(1))
+    return None
+
+
+def citation_meta(html: str) -> dict:
+    """Highwire Press `citation_*` meta tags, as on arXiv, ACM, IEEE, Springer: title, authors, date."""
+    try:
+        tree = lxml_html.fromstring(html)
+    except Exception:  # noqa: BLE001
+        return {}
+
+    def get(name: str) -> list[str]:
+        return [v.strip() for v in tree.xpath(f'//meta[@name="{name}"]/@content') if v.strip()]
+
+    authors = [" ".join(reversed(a.split(", ", 1))) if ", " in a else a for a in get("citation_author")]  # "Last, First"
+    author = ", ".join(authors[:3]) + (" et al." if len(authors) > 3 else "") if authors else None
+    date = next(iter(get("citation_publication_date") + get("citation_date")), None)
+    found = {"title": clean_title(next(iter(get("citation_title")), None)), "author": clean_author(author), "published": date.replace("/", "-") if date else None}
+    return {k: v for k, v in found.items() if v}
+
+
+# ---------- fetch ----------
+
+def fetch(url: str) -> tuple[str, str | bytes] | None:
+    """("html", text) or ("pdf", bytes); None for anything else or on error."""
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/pdf,*/*"})
     try:
         with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT) as res:  # honors HTTPS_PROXY
-            if "html" not in res.headers.get("content-type", "html"):
-                return None
-            return res.read(5_000_000).decode(res.headers.get_content_charset() or "utf-8", errors="replace")
+            ctype = res.headers.get("content-type", "text/html").lower()
+            charset = res.headers.get_content_charset() or "utf-8"
+            data = res.read(FETCH_MAX)
     except Exception as e:  # noqa: BLE001
         print(f"fetch failed {url}: {e}", file=sys.stderr)
         return None
+    if "pdf" in ctype or data.startswith(b"%PDF"):
+        return "pdf", data
+    if "html" in ctype:
+        return "html", data.decode(charset, errors="replace")
+    print(f"fetch skipped {url}: {ctype}", file=sys.stderr)
+    return None
+
+
+def fetch_and_extract(url: str) -> dict | None:
+    """Fetch the URL and extract whatever came back, HTML or PDF."""
+    if not (fetched := fetch(url)):
+        return None
+    kind, body = fetched
+    if kind == "html":
+        return extract(body, url, "fetch")
+    if content := extract_pdf(body, "fetch-pdf"):
+        if (landing := landing_page(url)) and (page := fetch(landing)) and page[0] == "html":
+            content.update(citation_meta(page[1]))  # the abstract page knows the paper better than the PDF's own metadata
+        return content
+    return None
 
 
 def acquire(url: str, events: list[dict]) -> dict | None:
     for ev in reversed(events):
         if ev.get("html") and (content := extract(ev["html"], url, "capture")):
             return content
-    if (html := fetch(url)) and (content := extract(html, url, "fetch")):
+    if content := fetch_and_extract(url):
         return content
     for ev in reversed(events):
         if (text := ev.get("text")) and len(text.split()) >= MIN_WORDS:
@@ -383,7 +484,7 @@ def retry_failed(store: Store, as_json: bool) -> int:
         except ValueError:
             pass
         folder = p.parent.name
-        if (html := fetch(item["url"])) and (content := extract(html, item["url"], "fetch")):
+        if content := fetch_and_extract(item["url"]):
             markdown = content.pop("markdown")
             item.update({k: v for k, v in content.items() if v is not None}, status="extracted")
             item["title"] = item.get("title") or content.get("title")

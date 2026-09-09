@@ -27,7 +27,7 @@ Steps: `ingest.py` (1 to 3), `analyze.mjs` (4), `rank.py` (5 to 7):
 
 1. apply retractions: a `remove` event is a retraction, not a delete. Per canonical URL the last event in the batch decides, ordered by `capturedAt` — a remove drops the captures before it (they are never fetched or evaluated) and archives the item if it was already processed; a capture after it survives and nothing is archived. The extension cannot delete from the workspace itself: its key is upload-only, and once processed there is no inbox file to delete, only an item to archive;
 2. canonicalize URL, dedup by the canonical `url` in existing `item.json` files (one item per canonical URL, captures appended);
-3. acquire content, first source that succeeds: reader-view extraction (readability + markdownify, metadata via trafilatura) of the HTML the browser captured; server-side fetch + the same extraction; capturer-supplied plain text;
+3. acquire content, first source that succeeds: reader-view extraction (readability + markdownify, metadata via trafilatura) of the HTML the browser captured; server-side fetch + the same extraction, or PyMuPDF layout → Markdown when the fetch returns a PDF (deterministic, no OCR; arXiv metadata from the abstract page); capturer-supplied plain text;
 4. analyze in an ephemeral DAM Invocation holding only the model connection: TL;DR, key claims, content type, category, topics, hard-won and grounded (0-10 with reasons). Article-only, so it never goes stale; result schema-validated by the platform; article text is data, not prompt. Rubric in the skill, overrides and the topic vocabulary in the state dir;
 5. relevance from **topic weights** in `topics.md` (the reader's interests, edited by hand or by the host agent from its memory), not from a per-article model judgment: when focus shifts, a few numbers change and the whole pool re-ranks for free;
 6. exclude archived, not-an-article, and news older than 14 days;
@@ -54,3 +54,20 @@ Unattended runs reach the network through the egress gateway; the `all` preset a
 ## Not yet
 
 Web UI, cross-user items, team routing, preference learning, author following, audio, e-ink, internal reader.
+
+## PDF extraction: library choice
+
+Measured 2026-09-09 on two arXiv papers: the single-column ACMM report (28 pages, 3 tables) and the two-column BERT paper (16 pages, tables). "Install" is the uv environment on macOS; ML tools also download models on first run. All runs offline after install, no OCR.
+
+| library | install | ACMM / BERT time | headings | tables | two columns | licence | verdict |
+|---|---|---|---|---|---|---|---|
+| **pymupdf4llm** 1.28 (PyMuPDF + layout model) | 230 MB | 2.7 s / 3.0 s | full hierarchy (h1–h3) | all found, `<br>` in wrapped cells | correct order | AGPL | **chosen** |
+| docling 2 (IBM) | 1.2 GB + models | 125 s first run, 8 s after | all flattened to `##` | best: every cell right | correct order | MIT | fallback if AGPL is a problem |
+| marker 1 | 1.1 GB + models | 68 s first run, 3.6 s after | levels wobble, HTML anchors leak in | good, some cells split | correct order | GPL-3 + non-commercial model weights | no |
+| unstructured (fast) | ~1 GB | slow install | 392 "titles" | none, columns transposed | broken | Apache-2 | no (hi_res needs models) |
+| markitdown (pdfminer) | 150 MB | 1 s | none | none (dashes miscounted) | interleaved, spaces lost | MIT | no |
+| pdfplumber | 44 MB | 1.2 s | none | found, rows as text | interleaved | MIT | no |
+| kreuzberg | 80 MB | 0.4 s | none | none | ok | MIT | no |
+| pdftotext -layout (poppler) | system | 0.1 s | none | whitespace-aligned only | ok | GPL | no |
+
+pymupdf4llm is the only small, fast option that keeps the heading hierarchy and reading order and emits real pipe tables; its layout step is a bundled ONNX classifier, deterministic and offline. Docling produces the cleanest tables but costs a gigabyte-class install, a two-minute first run and flat headings. Revisit if the agent image ever ships torch anyway, or if AGPL matters.

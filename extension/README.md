@@ -1,6 +1,6 @@
 # DAM Read Later browser extension
 
-Chrome and Arc, Manifest V3. One click captures the current page (URL, title, selection, and the full rendered HTML) and uploads it as a file into your agent's workspace on DAM. The agent's next refresh picks it up from `work/read-later/inbox/`.
+Chrome and Arc, Manifest V3. One click captures the current page (URL, title, selection, and the full rendered HTML; for a PDF tab just URL and title, the agent fetches the file) and uploads it as a file into your agent's workspace on DAM. The agent's next refresh picks it up from `work/read-later/inbox/`.
 
 No Slack app, no GitHub token. The only credential is a DAM API key.
 

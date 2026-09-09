@@ -3,7 +3,7 @@ name: read-later-ingest
 description: Ingests the read-later inbox. Turns pages bookmarked from the Chrome extension (JSON events under ~/work/read-later/inbox) into deduplicated items with clean Markdown articles under ~/work/read-later/items. Use when asked to process or ingest the read-later inbox, or before evaluating or ranking read-later items.
 compatibility: Requires uv (ships in the DAM agent image) and network access to pypi.org on first run.
 metadata:
-  version: "0.2"
+  version: "0.3"
 ---
 
 # Read Later · Ingest
@@ -24,7 +24,7 @@ From this skill's directory:
 uv run scripts/ingest.py ~/work/read-later
 ```
 
-- The first run downloads the script's dependencies (declared inline, PEP 723) into uv's cache. Later runs are offline and take a second.
+- The first run downloads the script's dependencies (declared inline, PEP 723) into uv's cache; PyMuPDF and its layout model make that about 150 MB. Later runs are offline and take a second, a few more per PDF.
 - The script is idempotent. Run it as often as you like; an empty inbox is a no-op.
 - stdout: one line per item (`extracted` / `failed` / with `--json`, one object each). stderr: one line per dropped, merged or archived event, then a summary. Every inbox file is accounted for in one of the two.
 - Exit code 0 even when some items fail; failures are recorded on the item.
@@ -33,7 +33,7 @@ uv run scripts/ingest.py ~/work/read-later
 
 1. **Canonicalize and dedupe.** Strips fragment, `www.`, tracking params. The same page captured twice is one item with two capture records.
 2. **Retract.** A `remove` event retracts captures of the same URL that came before it. Unprocessed ones are dropped; an already extracted item is archived and a line goes to `feedback.jsonl`. Nothing is ever deleted from `items/`.
-3. **Extract.** Captured HTML → readability + markdownify → Markdown with headings, links, tables and images; title, author and date via trafilatura. Fallback: fetch the URL. Fallback: the event's own `text`. Under 80 words counts as failure.
+3. **Extract.** Captured HTML → readability + markdownify → Markdown with headings, links, tables and images; title, author and date via trafilatura. Fallback: fetch the URL; an HTML response goes through the same extraction, a PDF (arXiv papers, reports) through PyMuPDF's layout analysis → Markdown with headings and tables, no OCR, no images; for arXiv the abstract page supplies title, authors and date. Fallback: the event's own `text`. Under 80 words counts as failure.
 4. **Save.** `items/<capturedAt>-<title slug>/item.json` and `content.md`. The HTML is not kept. The inbox file is deleted.
 
 ## Marking an item as read or removing it from chat

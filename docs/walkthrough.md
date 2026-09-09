@@ -56,7 +56,7 @@ skills/read-later-ingest/
 What `ingest.py` does per inbox file, in order:
 
 1. **Canonicalize + dedupe** — strip fragment, `www.`, tracking params. Same page twice = one item. `done` and `remove` events handled first (mark read / archive).
-2. **Extract** — captured HTML → readability → Markdown with images and tables; title/author/date via trafilatura. Fallback: fetch the URL. Fails visibly if neither yields ≥ 80 words.
+2. **Extract** — captured HTML → readability → Markdown with images and tables; title/author/date via trafilatura. Fallback: fetch the URL; a PDF response goes through PyMuPDF's layout analysis instead (headings, tables, no OCR, no images), with arXiv's abstract page for metadata. Fails visibly if nothing yields ≥ 80 words.
 3. **Save** — `items/<time>-<slug>/item.json` + `content.md`, drop the html, delete the inbox file.
 
 Tested locally on a real 211 KB capture: 2682 words extracted, duplicate capture merged into one item, remove handled, non-JSON file skipped, rerun is a no-op.
