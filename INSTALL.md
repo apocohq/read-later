@@ -1,6 +1,6 @@
 # Installing read-later on a DAM agent
 
-One agent, six skills, one Chrome extension, two schedules. Two ways to get there: tell the agent to install itself (section A), or run the CLI yourself (section B). Both end with the extension (section C).
+One agent, six skills, one Chrome extension, two schedules, and optionally Slack. Two ways to get there: tell the agent to install itself (section A), or run the CLI yourself (section B). Both end with the extension (section C) and, if you want links from Slack, section D.
 
 ## 0. Before either way (owner, once)
 
@@ -8,7 +8,7 @@ The agent must exist on the **Claude Code** template and have two things only an
 
 - **A model connection.** Analysis runs in ephemeral Invocations that need exactly one model connection. Find its id with `dam connection list`, then `dam connection grant <agent> --connection <model-connection>`.
 - **Network access** for the first-run package downloads (PyPI) and the article-fetch fallback: `dam network apply-preset <agent> --preset all --yes`. The `trusted` preset also works; then only bookmarks that arrive without HTML cannot be fetched.
-- **The Slack connection**, if links shared in Slack should be swept: `dam connection grant <agent> --connection slack`. The sweep only reads (two search tools, allowlisted in the script); without the grant the refresh skips it.
+- **The Slack connection**, if links shared in Slack should be swept: `dam connection grant <agent> --connection slack`. It must be *your* Slack connection (`dam connection templates` → Slack, log in as yourself): the sweep searches as you, so it sees what you see, including your DMs and your saved messages. It only reads (two search tools, allowlisted in the script). Without the grant the refresh skips the sweep. See section D.
 - A fresh agent, if you need one: `dam agent create <agent> --template claude-code`.
 
 The skill source must be registered once per DAM account: `dam skill source add https://github.com/apocohq/read-later` ("already registered" means it is done).
@@ -66,6 +66,22 @@ dam schedule create <agent> --name read-later-prune --daily 09:00 --weekdays SU 
 3. Open the extension's options: DAM host (`https://…`), the API key, pick the agent. Leave the repo folder at `work/read-later`. Click **Send a test file**; a file should appear under `work/read-later/inbox/` (`dam file list <agent> work/read-later/inbox`).
 
 Using it: click the bookmark icon to save a page; right-click for **Read later (must read)**, **Mark as read**, or **Remove from Read Later**. Alt+Shift+R saves, Alt+Shift+M saves as must read.
+
+## D. Slack (owner, optional)
+
+With the Slack connection granted (section 0) and `read-later-slack` installed, the daily refresh sweeps Slack before ingest. Nothing to configure.
+
+Using it:
+
+- **Save for later** on any Slack message with a link (the bookmark icon in the message menu, on desktop or mobile). The next refresh captures it, no questions asked. This is the Slack equivalent of the extension's bookmark button.
+- **Send a link to yourself** (your own DM). Same effect.
+- Everything else with a link, in every channel and DM you are in, is judged by the agent: it captures what you would want to read and skips the rest. The refresh report lists its picks; tell the agent "also add what X posted in #channel" if it missed one, or **Remove from Read Later** in the extension if it picked wrong.
+- Links behind a login (Google Docs, Box, internal GitHub) and social posts cannot be fetched by the agent. The library page lists them under **Needs attention**; open them and save from the browser if you want them.
+- The first sweep looks back 7 days. Later sweeps continue from the last one. Slack rate-limits search, so a sweep can take a few minutes; the script waits and retries.
+
+By hand, in the agent's chat: *sweep slack for read later*. Then *ingest, analyze, rank and deliver read later* as usual, or the whole line from [First run by hand](#first-run-by-hand).
+
+What the agent never does: post, react, draft or schedule anything in Slack as part of this. The script refuses every Slack tool except the two searches.
 
 ## Reader context
 
