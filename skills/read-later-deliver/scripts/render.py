@@ -13,8 +13,8 @@ template (or drop a copy at STATE_DIR/template.html, which wins).
 
 Records the data's hash in STATE_DIR/deliver.json and prints one JSON object:
 {"html": "<path>", "changed": true|false, "artifactId": "<id or null>", "items": N}.
-`changed` is false when the data is identical to the last publish, so the agent
-can skip publishing a new artifact version.
+`changed` is false when the data and the template are identical to the last publish,
+so the agent can skip publishing a new artifact version.
 
 Exit codes: 0 ran, 2 bad arguments, 3 STATE_DIR or queue.json missing.
 """
@@ -117,8 +117,8 @@ def main(argv: list[str]) -> int:
     page = template.replace("/*__DATA__*/", payload, 1)
     (root / "queue.html").write_text(page)
 
-    # hash the data without the timestamp, so an unchanged queue is unchanged
-    digest = hashlib.sha256(json.dumps({**data, "generatedAt": None}, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    # hash the data without the timestamp, plus the template, so an unchanged queue is unchanged and a redesign republishes
+    digest = hashlib.sha256((json.dumps({**data, "generatedAt": None}, sort_keys=True, ensure_ascii=False) + template).encode()).hexdigest()
     dpath = root / "deliver.json"
     state = json.loads(dpath.read_text()) if dpath.exists() else {}
     changed = state.get("contentHash") != digest

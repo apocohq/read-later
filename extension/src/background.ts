@@ -11,7 +11,8 @@ interface PageSnapshot {
   url: string;
   title: string;
   selectedText: string;
-  html: string;
+  /** Absent when the tab is not an HTML document: Chrome's PDF viewer is an `<embed>` shell, so the agent fetches the URL itself. */
+  html?: string;
 }
 
 /** Runs inside the page. Must be self-contained: no imports, no closures. */
@@ -20,7 +21,7 @@ function snapshotPage(): PageSnapshot {
     url: location.href,
     title: document.title,
     selectedText: window.getSelection()?.toString() ?? "",
-    html: document.documentElement.outerHTML,
+    html: /html/.test(document.contentType) ? document.documentElement.outerHTML : undefined,
   };
 }
 
@@ -81,8 +82,11 @@ async function capture(opts: { mustRead: boolean; note?: string }): Promise<void
 
   const stopBusy = startBusy(tab.id);
   try {
-    const [result] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: snapshotPage });
-    const page = result?.result as PageSnapshot | undefined;
+    // A tab that refuses injection (some viewers do) still gets captured by URL; the agent fetches it.
+    const page = await chrome.scripting
+      .executeScript({ target: { tabId: tab.id }, func: snapshotPage })
+      .then(([result]) => result?.result as PageSnapshot | undefined)
+      .catch(() => undefined);
     const id = newId();
     const event: BrowserCapture = {
       id,

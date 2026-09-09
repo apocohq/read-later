@@ -11,7 +11,7 @@ export interface BrowserCapture {
   url: string;
   title?: string;
   selectedText?: string;
-  /** Full rendered page HTML. The agent extracts the article from it. */
+  /** Full rendered page HTML. The agent extracts the article from it. Omitted for non-HTML tabs (PDF viewer); the agent fetches those. */
   html?: string;
   note?: string;
   mustRead: boolean;

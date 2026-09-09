@@ -14,7 +14,7 @@ The page is `assets/template.html` (design) plus data injected by `scripts/rende
 
 ## Highlights
 
-In the reader pane the reader turns the highlighter on (pen icon in the sticky header, with five colors), selects text, and gets a mark; clicking a mark adds a note, changes its color or removes it. The list of highlights sits below the article. Highlights live in the reader's browser (localStorage per item, or only in memory in DAM's sandboxed viewer, which the page says) until **Copy for chat** or **Done reading** puts the content of `highlights.json` on the clipboard and the reader pastes it into chat. The renderer injects that file back into the page, so after the next publish the highlights show in every browser; marks not yet sent are underlined and counted as "unsent". The page cannot write to the agent yet; when DAM's artifact bridge ships, the artifact will write the file itself.
+In the reader pane the reader turns the highlighter on (pen icon in the sticky header, with five colors), selects text, and gets a mark; clicking a mark adds a note, changes its color or removes it. The list of highlights sits below the article. The header also has **Remove**, which copies a one-line request to drop the article. Highlights live in the reader's browser (localStorage per item, or only in memory in DAM's sandboxed viewer, which the page says) until **Copy for chat** or **Done reading** puts the content of `highlights.json` on the clipboard and the reader pastes it into chat. The renderer injects that file back into the page, so after the next publish the highlights show in every browser; marks not yet sent are underlined and counted as "unsent". The page cannot write to the agent yet; when DAM's artifact bridge ships, the artifact will write the file itself.
 
 ### When the reader pastes highlights
 
@@ -24,6 +24,8 @@ The paste reads "Read later highlights, replace `items/<folder>/highlights.json`
 2. Write the JSON verbatim to `highlights.json` in that folder, replacing the previous file. Do not edit, reorder or summarize it; the page produced it and reads it back.
 3. Append one line to `~/work/read-later/feedback.jsonl`: `{"item": "<folder>", "action": "highlight", "reason": "<n> highlight(s) via paste", "at": "<now, ISO>"}`.
 4. Reply with one line: how many highlights the file holds, e.g. "saved 4 highlights". They show in the library page after the next deliver. Do not inspect, dedupe or comment on the highlights themselves.
+
+If the paste is "Read later, remove this article from my list: <url>" (the page's **Remove** button), file a `remove` event the way `read-later-ingest` describes for chat and run its script; the item is archived, never deleted, and leaves the queue at the next deliver.
 
 If the paste starts with "Read later, done reading, mark it as read: <url>", also mark the item read the way `read-later-ingest` describes for chat: one `done` event into the inbox, then run its script. Highlights first, then done.
 

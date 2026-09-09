@@ -67,12 +67,12 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 .cover .topic{font-size:13px;letter-spacing:.01em;opacity:.78;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
 .cover .kicker .cat{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cover .kicker .pill{flex:none;background:#f2c14e;color:#222;border-radius:3px;padding:1px 6px;letter-spacing:.08em;font-weight:700}
+.cover .badge{flex:none;font-size:16px;font-weight:700;letter-spacing:0;text-transform:none;font-variant-numeric:tabular-nums;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.22);border-radius:6px;padding:3px 8px;line-height:1.2}
 .cover .title{font-size:19px;line-height:1.22;font-weight:600;text-wrap:balance;text-shadow:0 1px 2px rgba(0,0,0,.25);display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
-.cover .foot{font-size:11px;opacity:.9;display:flex;justify-content:space-between;gap:6px}
+.cover .foot{font-size:11px;opacity:.95;display:flex;justify-content:space-between;align-items:flex-end;gap:6px}
+.cover .mid{min-width:0}
+.cover .src{font-size:16px;line-height:1.2;font-weight:500;opacity:.85;margin-bottom:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.25)}
 .under{display:flex;flex-direction:column;gap:6px;padding:0 2px}
-.total{display:flex;align-items:baseline;gap:6px;font-size:10.5px;color:var(--ink3);letter-spacing:.08em;text-transform:uppercase}
-.total b{font-size:17px;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:0;margin-left:auto}
-.total .of{color:var(--ink3);letter-spacing:0;font-size:11px}
 .bars{display:grid;grid-template-columns:auto 1fr auto;gap:4px 8px;align-items:center;font-size:10.5px;color:var(--ink3)}
 .bars .v{font-variant-numeric:tabular-nums;color:var(--ink2);min-width:1.6em;text-align:right}
 .bar{display:grid;grid-template-columns:repeat(10,1fr);gap:2px;height:5px}
@@ -98,6 +98,8 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 .sw[aria-pressed="true"]{border-color:var(--ink)}
 .tools .sep{width:1px;height:18px;background:var(--line);margin:0 4px}
 .tools .chip{padding:4px 10px;font-size:12.5px}
+.chip.danger{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,var(--line));margin-left:auto}
+.chip.danger:hover{background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .pane .meta a{color:var(--accent);text-decoration:none}.pane .meta a:hover{text-decoration:underline}
 .pane .via{margin:8px 0 0;font-size:13px;line-height:1.45;color:var(--ink2);font-style:italic}.pane .via span{font-style:normal;color:var(--ink3)}
 .close{margin-left:auto;flex:none;border:1px solid var(--line);background:transparent;color:var(--ink2);border-radius:999px;width:34px;height:34px;cursor:pointer;font-size:18px;line-height:1}
@@ -119,7 +121,7 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 .article p{margin:0 0 1em}.article img{max-width:100%;height:auto;border-radius:6px;margin:.4em 0}
 .article a{color:var(--accent)}.article blockquote{margin:1em 0;padding:.2em 1em;border-left:3px solid var(--line);color:var(--ink2)}
 .article pre{background:var(--bg2);padding:12px 14px;border-radius:6px;overflow:auto;font-size:13.5px}.article code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.92em}
-.article ul,.article ol{padding-left:1.4em}.article li{margin:.25em 0}.article table{border-collapse:collapse;font-size:14px}.article td,.article th{border:1px solid var(--line);padding:4px 8px}
+.article ul,.article ol{padding-left:1.4em}.article li{margin:.25em 0}.article .tbl{overflow-x:auto;margin:1em 0}.article table{border-collapse:collapse;font-size:14px;line-height:1.4}.article td,.article th{border:1px solid var(--line);padding:5px 9px;vertical-align:top}.article th{text-align:left;background:var(--bg2);font-weight:600}
 .article hr{border:0;border-top:1px solid var(--line);margin:1.5em 0}
 .note{font-size:12.5px;color:var(--ink3)}
 
@@ -191,8 +193,8 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
   const colors = cat => { const [h,s] = HUES[cat] || HUES.other; return `--c1:hsl(${h} ${s}% 34%);--c2:hsl(${(h+18)%360} ${Math.max(20,s-10)}% 22%)`; };
   const slots = v => { const n = Math.round(Math.max(0, Math.min(10, Number(v)||0))); return Array.from({length:10}, (_,i) => `<i class="${i < n ? 'on' : ''}"></i>`).join(''); };
   const num = v => v == null ? '–' : (Number.isInteger(Number(v)) ? String(v) : Number(v).toFixed(1));
-  // overall score: rank's priority (0-10, must-read can push it over) shown as 0-5 with two decimals
-  const score5 = v => v == null ? '–' : (Math.max(0, Math.min(10, Number(v))) / 2).toFixed(2);
+  // overall score: rank's priority, 0-10 (must-read can push it over, so clamp), two decimals
+  const score10 = v => v == null ? '–' : Math.max(0, Math.min(10, Number(v))).toFixed(2);
 
   document.getElementById('sub').textContent = `${items.length} saved · generated ${(DATA.generatedAt||'').replace('T',' ').replace(/:\d\d(\.\d+)?Z$/,' UTC')}`;
 
@@ -215,11 +217,10 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
           <div class="kicker"><span class="cat">${esc(it.category||'')}</span>${it.mustRead ? '<span class="pill">must</span>' : ''}</div>
           ${it.topTopic ? `<div class="topic">${esc(it.topTopic)}</div>` : ''}
         </div>
-        <div class="title serif">${esc(it.title||it.url)}</div>
-        <div class="foot"><span>${esc(domain(it.url))}${it.via && it.via.by ? ' · via Slack' : ''}</span><span>${esc(it.minutes)} min${HL.current(it).length ? ' · '+HL.current(it).length+' ✎' : ''}</span></div>
+        <div class="mid"><div class="src serif">${esc(domain(it.url))}${it.via && it.via.by ? ' · via Slack' : ''}</div><div class="title serif">${esc(it.title||it.url)}</div></div>
+        <div class="foot"><span>${esc(it.minutes)} min${HL.current(it).length ? ' · '+HL.current(it).length+' ✎' : ''}</span><span class="badge" title="Overall score: half relevance, half quality; long reads lose a point, must-read gains three">${score10(it.priority)}</span></div>
       </div>
       <div class="under">
-        <div class="total" title="Overall score: half relevance, half quality; long reads lose a point, must-read gains three"><span>score</span><b>${score5(it.priority)}</b><span class="of">/ 5</span></div>
         <div class="bars">
           <span>relevance</span><div class="bar rl">${slots(it.relevance)}</div><span class="v">${num(it.relevance)}</span>
           <span>hard-won</span><div class="bar hw">${slots(it.hardWon&&it.hardWon.score)}</div><span class="v">${num(it.hardWon&&it.hardWon.score)}</span>
@@ -250,13 +251,22 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       .replace(/!\[([^\]]*)\]\(([^)\s]+)[^)]*\)/g, (m,a,u) => /^https?:\/\//.test(u) ? `<img alt="${a}" src="${u}" loading="lazy">` : '')
       .replace(/\[([^\]]+)\]\(([^)\s]+)[^)]*\)/g, (m,t,u) => /^https?:\/\//.test(u) ? `<a href="${u}" target="_blank" rel="noopener">${t}</a>` : t)
       .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>');
+      .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>')
+      .replace(/&lt;br\s*\/?&gt;/gi, '<br>').replace(/&lt;\/?mark&gt;/gi, '');  // PDF extraction leftovers in older items
+    // pipe tables (PDF extraction and many blogs): header row, separator row, body rows; cells may hold <br>
+    const cells = r => r.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => inline(c.trim()));
+    const isRow = s => /^\s*\|/.test(s || ''), isSep = s => /^\s*\|?\s*:?-{3,}/.test(s || '') && (s || '').includes('|');
+    const table = rows => '<div class="tbl"><table><thead><tr>' + cells(rows[0]).map(c => `<th>${c}</th>`).join('') + '</tr></thead><tbody>' +
+      rows.slice(2).map(r => '<tr>' + cells(r).map(c => `<td>${c}</td>`).join('') + '</tr>').join('') + '</tbody></table></div>';
     const flush = () => { if (para.length){ out.push('<p>'+inline(para.join(' '))+'</p>'); para = []; } if (list){ out.push(`</${list}>`); list = null; } };
-    for (const raw of lines){
-      const l = raw.replace(/\s+$/,'');
+    for (let i = 0; i < lines.length; i++){
+      const raw = lines[i], l = raw.replace(/\s+$/,'');
       if (code !== null){ if (/^```/.test(l)){ out.push('<pre><code>'+esc(code.join('\n'))+'</code></pre>'); code = null; } else code.push(l); continue; }
       if (/^```/.test(l)){ flush(); code = []; continue; }
-      if (!l.trim()){ flush(); continue; }
+      // a blank line inside a list (a "loose" list) keeps the list open, so numbering continues instead of restarting at 1
+      if (!l.trim()){ if (list && (list === 'ul' ? /^\s*[-*+]\s+/ : /^\s*\d+[.)]\s+/).test(lines[i+1] || '')) continue; flush(); continue; }
+      if (/^\s*<!--.*-->\s*$/.test(l)){ continue; }
+      if (isRow(l) && isSep(lines[i+1])){ flush(); const rows = []; while (i < lines.length && isRow(lines[i])) rows.push(lines[i++]); i--; out.push(table(rows)); continue; }
       let m;
       if ((m = l.match(/^(#{1,6})\s+(.*)/))){ flush(); const n = Math.min(3, m[1].length); out.push(`<h${n}>${inline(m[2])}</h${n}>`); continue; }
       if (/^(-{3,}|\*{3,})$/.test(l)){ flush(); out.push('<hr>'); continue; }
@@ -365,10 +375,11 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       const json = hasFile ? JSON.stringify(file(it), null, 2) : '';
       const fileLine = `Read later highlights, replace items/${it.id}/highlights.json with this file:\n\n${json}`;
       if (action === 'done') return `Read later, done reading, mark it as read: ${it.url}` + (json ? `\n\n${fileLine}` : '');
+      if (action === 'remove') return `Read later, remove this article from my list: ${it.url}`;
       return fileLine;
     };
     const transports = [
-      async (text, action, ui) => { try { await navigator.clipboard.writeText(text); ui.toast(action === 'done' ? 'Copied. Paste it to your agent to finish this article.' : 'Copied. Paste it to your agent.'); } catch { ui.fallback(text); } return true; },
+      async (text, action, ui) => { try { await navigator.clipboard.writeText(text); ui.toast(action === 'done' ? 'Copied. Paste it to your agent to finish this article.' : action === 'remove' ? 'Copied. Paste it to your agent to remove this article.' : 'Copied. Paste it to your agent.'); } catch { ui.fallback(text); } return true; },
     ];
     async function emit(it, action, ui){ const text = payload(it, action); for (const t of transports) if (await t(text, action, ui)) return text; return null; }
     function setColorOf(it, id, color){ const st = state(it); const mine = st.added.find(h => h.id === id); if (mine){ mine.color = color; save(it, st); return; } const src = synced(it).find(h => h.id === id); if (!src) return; st.added.push({...src, id: newId('h'), color}); if (!st.deleted.some(d => d.id === id)) st.deleted.push({id, at: Date.now()}); save(it, st); }
@@ -380,14 +391,14 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
 
   const reader = document.getElementById('reader'), pane = document.getElementById('pane');
   function open(it){
-    const sc = (k, label, cls, score, reason) => `<div class="score" data-k="${k}" role="button" tabindex="0" aria-expanded="false"><div class="n"><span>${label}<span class="chev">▾</span></span><b>${esc(score ?? '–')}<span style="color:var(--ink3);font-size:11px"> /10</span></b></div><div class="bar ${cls}">${slots(score)}</div><p>${esc(reason||'')}</p></div>`;
+    const sc = (k, label, cls, score, reason) => `<div class="score" data-k="${k}" role="button" tabindex="0" aria-expanded="false"><div class="n"><span>${label}<span class="chev">▾</span></span><b>${esc(score ?? '–')}</b></div><div class="bar ${cls}">${slots(score)}</div><p>${esc(reason||'')}</p></div>`;
     pane.innerHTML = `
       <div class="head">
         <div class="mini" style="${colors(it.category)}"></div>
         <div style="min-width:0;flex:1">
           <h2 id="r-title" class="serif">${esc(it.title||it.url)}</h2>
           <div class="meta">
-            <span title="Overall score, 0-5"><b>${score5(it.priority)}</b> / 5</span><span>${esc(domain(it.url))}</span>${it.author ? `<span>${esc(it.author)}</span>` : ''}${it.published ? `<span>${esc(it.published)}</span>` : ''}
+            <span title="Overall score, 0-10"><b>${score10(it.priority)}</b></span><span>${esc(domain(it.url))}</span>${it.author ? `<span>${esc(it.author)}</span>` : ''}${it.published ? `<span>${esc(it.published)}</span>` : ''}
             <span>${esc(it.minutes)} min</span><span>${esc(it.category)}${it.contentType ? ' · '+esc(it.contentType) : ''}</span>
             ${it.via && it.via.by ? `<span>shared by ${esc(it.via.by)}${it.via.ref ? ` <a href="${esc(it.via.ref)}" target="_blank" rel="noopener" title="Open the Slack message">↗</a>` : ''}</span>` : ''}
             <a href="${esc(it.url)}" target="_blank" rel="noopener">Open original ↗</a>
@@ -440,11 +451,13 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
         ${hlOn ? `<span class="swatches" role="radiogroup" aria-label="Highlight color">${HL.COLORS.map(c => `<button class="sw" data-c="${c}" aria-pressed="${c === color}" title="${c}" aria-label="${c}"></button>`).join('')}</span>` : ''}
         <span class="sep"></span>
         <button class="chip" id="hl-copy" ${list.length ? '' : 'disabled'} title="Copy highlights.json for your agent">Copy for chat</button>
-        <button class="chip" id="hl-done" title="Copy a done message, with the highlights, for your agent">Done reading</button>`;
+        <button class="chip" id="hl-done" title="Copy a done message, with the highlights, for your agent">Done reading</button>
+        <button class="chip danger" id="hl-remove" title="Copy a message asking your agent to remove this article">Remove</button>`;
       tools.querySelector('#hl-toggle').addEventListener('click', () => { hlOn = !hlOn; closePop(); article.classList.toggle('hl-on', hlOn); renderTools(); renderPanel(); });
       tools.querySelectorAll('.sw').forEach(b => b.addEventListener('click', () => { HL.setColor(b.dataset.c); renderTools(); }));
       tools.querySelector('#hl-copy').addEventListener('click', () => HL.emit(it, 'highlight', ui));
       tools.querySelector('#hl-done').addEventListener('click', () => HL.emit(it, 'done', ui));
+      tools.querySelector('#hl-remove').addEventListener('click', () => HL.emit(it, 'remove', ui));
     }
     function renderPanel(){
       const list = HL.current(it), unsent = list.filter(h => HL.isLocal(it, h.id)).length;
@@ -496,7 +509,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
   function renderTopics(){
     const all = DATA.topics || [], shown = moreTopics ? all : all.slice(0, TOPICS_SHOWN), rest = all.length - TOPICS_SHOWN;
     document.getElementById('topics').innerHTML = `<button class="chip" data-f="all" aria-pressed="${filter==='all'}">All</button>` +
-      shown.map(t => `<button class="chip" data-f="${esc(t.label)}" aria-pressed="${filter===t.label}" title="relevance ${esc(t.weight)}/10 · ${t.count} article${t.count===1?'':'s'}">${esc(t.label)}<span class="n">${t.count}</span></button>`).join('') +
+      shown.map(t => `<button class="chip" data-f="${esc(t.label)}" aria-pressed="${filter===t.label}" title="relevance ${esc(t.weight)} · ${t.count} article${t.count===1?'':'s'}">${esc(t.label)}<span class="n">${t.count}</span></button>`).join('') +
       (rest > 0 ? `<button class="chip more" data-more="1" aria-expanded="${moreTopics}">${moreTopics ? 'Fewer' : `${rest} more`}</button>` : '');
   }
   document.getElementById('controls').addEventListener('click', e => {
