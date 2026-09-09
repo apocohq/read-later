@@ -261,7 +261,8 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       const raw = lines[i], l = raw.replace(/\s+$/,'');
       if (code !== null){ if (/^```/.test(l)){ out.push('<pre><code>'+esc(code.join('\n'))+'</code></pre>'); code = null; } else code.push(l); continue; }
       if (/^```/.test(l)){ flush(); code = []; continue; }
-      if (!l.trim()){ flush(); continue; }
+      // a blank line inside a list (a "loose" list) keeps the list open, so numbering continues instead of restarting at 1
+      if (!l.trim()){ if (list && (list === 'ul' ? /^\s*[-*+]\s+/ : /^\s*\d+[.)]\s+/).test(lines[i+1] || '')) continue; flush(); continue; }
       if (/^\s*<!--.*-->\s*$/.test(l)){ continue; }
       if (isRow(l) && isSep(lines[i+1])){ flush(); const rows = []; while (i < lines.length && isRow(lines[i])) rows.push(lines[i++]); i--; out.push(table(rows)); continue; }
       let m;
