@@ -7,7 +7,7 @@ One agent, five skills, one Chrome extension, two schedules. Two ways to get the
 The agent must exist on the **Claude Code** template and have two things only an owner can grant. Do these first; nothing below asks for them again.
 
 - **A model connection.** Analysis runs in ephemeral Invocations that need exactly one model connection. Find its id with `dam connection list`, then `dam connection grant <agent> --connection <model-connection>`.
-- **Network access** for the first-run package downloads (PyPI) and the article-fetch fallback: `dam network apply-preset <agent> --preset all --yes`. The `trusted` preset also works; then only bookmarks that arrive without HTML cannot be fetched.
+- **Network access** for the first-run package downloads (PyPI) and for fetching pages the browser could not capture: `dam network apply-preset <agent> --preset all --yes`. The `trusted` preset also works, but then bookmarks that arrive without HTML fail unless their host is allowed; PDFs (arXiv papers, reports) are always fetched by the agent, so their hosts must be reachable.
 - A fresh agent, if you need one: `dam agent create <agent> --template claude-code`.
 
 The skill source must be registered once per DAM account: `dam skill source add https://github.com/apocohq/read-later` ("already registered" means it is done).
@@ -27,7 +27,7 @@ If you are the agent reading this, do these in order and report at the end. Do n
 1. **Skills.** Call `list_skill_sources` and find the source whose git URL is `https://github.com/apocohq/read-later`. If it is missing, stop and tell the owner to run `dam skill source add https://github.com/apocohq/read-later`. Otherwise call `install_skill` for each of `read-later-ingest`, `read-later-analyze`, `read-later-rank`, `read-later-deliver`, `read-later-prune`. Installing an already installed skill updates it to the source's HEAD; that is fine.
 2. **State dir.** `mkdir -p ~/work/read-later/inbox`. Everything read-later writes lives under `~/work/read-later/`.
 3. **Reader context.** Write `~/work/read-later/context.md`. If you keep files about the person you work for (a USER.md, memory notes, current projects), list them, one path per line with a few words on what each holds, under the heading `# Reader context` and the line `Read these before reweighing topics:`. If you know nothing about the reader, write the single line `NO CONTEXT AVAILABLE`. See [Reader context](#reader-context) for both shapes.
-4. **Dependencies.** From the ingest skill's directory run `uv run scripts/ingest.py ~/work/read-later` once. The inbox is empty, so it only downloads the Python packages and prints `done: 0 extracted, 0 failed`.
+4. **Dependencies.** From the ingest skill's directory run `uv run scripts/ingest.py ~/work/read-later` once. The inbox is empty, so it only downloads the Python packages (about 250 MB, most of it PyMuPDF for PDF extraction) and prints `done: 0 extracted, 0 failed`.
 5. **Schedules.** Call `create_schedule` twice with the exact names, tasks and times from [Schedules](#schedules). Use the owner's timezone if you know it, otherwise `Europe/Prague`. Fresh session each tick. If a schedule with the same name already exists, leave it.
 6. **Git.** If `~/work` is a git repository, make sure `.gitignore` covers `read-later/inbox/`, `read-later/items/`, `read-later/done/` and `read-later/archive/`; keep `topics.md`, `context.md` and `feedback.jsonl` versioned.
 7. **Report and stop.** List what you created, then tell the owner the two things that remain theirs: the extension key (section C) and, optionally, a first pass of topic weights after the first refresh. Do not run analyze, rank or deliver now; there is nothing to process, and the first scheduled refresh does it.
@@ -64,7 +64,7 @@ dam schedule create <agent> --name read-later-prune --daily 09:00 --weekdays SU 
 2. Build and load the extension: `pnpm install && pnpm ext:build`, then in Chrome `chrome://extensions` → Developer mode → Load unpacked → `extension/dist`.
 3. Open the extension's options: DAM host (`https://…`), the API key, pick the agent. Leave the repo folder at `work/read-later`. Click **Send a test file**; a file should appear under `work/read-later/inbox/` (`dam file list <agent> work/read-later/inbox`).
 
-Using it: click the bookmark icon to save a page; right-click for **Read later (must read)**, **Mark as read**, or **Remove from Read Later**. Alt+Shift+R saves, Alt+Shift+M saves as must read.
+Using it: click the bookmark icon to save a page; right-click for **Read later (must read)**, **Mark as read**, or **Remove from Read Later**. Alt+Shift+R saves, Alt+Shift+M saves as must read. A PDF open in the browser works the same way; the agent downloads and converts it during the refresh.
 
 ## Reader context
 
