@@ -68,7 +68,6 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 .cover .kicker .cat{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cover .kicker .pill{flex:none;background:#f2c14e;color:#222;border-radius:3px;padding:1px 6px;letter-spacing:.08em;font-weight:700}
 .cover .badge{flex:none;font-size:16px;font-weight:700;letter-spacing:0;text-transform:none;font-variant-numeric:tabular-nums;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.22);border-radius:6px;padding:3px 8px;line-height:1.2}
-.cover .badge small{font-size:10px;font-weight:500;opacity:.75;margin-left:2px}
 .cover .title{font-size:19px;line-height:1.22;font-weight:600;text-wrap:balance;text-shadow:0 1px 2px rgba(0,0,0,.25);display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
 .cover .foot{font-size:11px;opacity:.95;display:flex;justify-content:space-between;align-items:flex-end;gap:6px}
 .cover .mid{min-width:0}
@@ -215,7 +214,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
           ${it.topTopic ? `<div class="topic">${esc(it.topTopic)}</div>` : ''}
         </div>
         <div class="mid"><div class="src serif">${esc(domain(it.url))}</div><div class="title serif">${esc(it.title||it.url)}</div></div>
-        <div class="foot"><span>${esc(it.minutes)} min${HL.current(it).length ? ' · '+HL.current(it).length+' ✎' : ''}</span><span class="badge" title="Overall score: half relevance, half quality; long reads lose a point, must-read gains three">${score10(it.priority)}<small>/10</small></span></div>
+        <div class="foot"><span>${esc(it.minutes)} min${HL.current(it).length ? ' · '+HL.current(it).length+' ✎' : ''}</span><span class="badge" title="Overall score: half relevance, half quality; long reads lose a point, must-read gains three">${score10(it.priority)}</span></div>
       </div>
       <div class="under">
         <div class="bars">
@@ -378,14 +377,14 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
 
   const reader = document.getElementById('reader'), pane = document.getElementById('pane');
   function open(it){
-    const sc = (k, label, cls, score, reason) => `<div class="score" data-k="${k}" role="button" tabindex="0" aria-expanded="false"><div class="n"><span>${label}<span class="chev">▾</span></span><b>${esc(score ?? '–')}<span style="color:var(--ink3);font-size:11px"> /10</span></b></div><div class="bar ${cls}">${slots(score)}</div><p>${esc(reason||'')}</p></div>`;
+    const sc = (k, label, cls, score, reason) => `<div class="score" data-k="${k}" role="button" tabindex="0" aria-expanded="false"><div class="n"><span>${label}<span class="chev">▾</span></span><b>${esc(score ?? '–')}</b></div><div class="bar ${cls}">${slots(score)}</div><p>${esc(reason||'')}</p></div>`;
     pane.innerHTML = `
       <div class="head">
         <div class="mini" style="${colors(it.category)}"></div>
         <div style="min-width:0;flex:1">
           <h2 id="r-title" class="serif">${esc(it.title||it.url)}</h2>
           <div class="meta">
-            <span title="Overall score, 0-10"><b>${score10(it.priority)}</b> / 10</span><span>${esc(domain(it.url))}</span>${it.author ? `<span>${esc(it.author)}</span>` : ''}${it.published ? `<span>${esc(it.published)}</span>` : ''}
+            <span title="Overall score, 0-10"><b>${score10(it.priority)}</b></span><span>${esc(domain(it.url))}</span>${it.author ? `<span>${esc(it.author)}</span>` : ''}${it.published ? `<span>${esc(it.published)}</span>` : ''}
             <span>${esc(it.minutes)} min</span><span>${esc(it.category)}${it.contentType ? ' · '+esc(it.contentType) : ''}</span>
             <a href="${esc(it.url)}" target="_blank" rel="noopener">Open original ↗</a>
           </div>
@@ -492,7 +491,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
   function renderTopics(){
     const all = DATA.topics || [], shown = moreTopics ? all : all.slice(0, TOPICS_SHOWN), rest = all.length - TOPICS_SHOWN;
     document.getElementById('topics').innerHTML = `<button class="chip" data-f="all" aria-pressed="${filter==='all'}">All</button>` +
-      shown.map(t => `<button class="chip" data-f="${esc(t.label)}" aria-pressed="${filter===t.label}" title="relevance ${esc(t.weight)}/10 · ${t.count} article${t.count===1?'':'s'}">${esc(t.label)}<span class="n">${t.count}</span></button>`).join('') +
+      shown.map(t => `<button class="chip" data-f="${esc(t.label)}" aria-pressed="${filter===t.label}" title="relevance ${esc(t.weight)} · ${t.count} article${t.count===1?'':'s'}">${esc(t.label)}<span class="n">${t.count}</span></button>`).join('') +
       (rest > 0 ? `<button class="chip more" data-more="1" aria-expanded="${moreTopics}">${moreTopics ? 'Fewer' : `${rest} more`}</button>` : '');
   }
   document.getElementById('controls').addEventListener('click', e => {
