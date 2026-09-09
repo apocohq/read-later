@@ -69,8 +69,11 @@ def score(item: dict, weights: dict[str, int], today: date) -> tuple[float, dict
         pub = parse_date(item.get("published"))
         if pub and (today - pub).days > NEWS_MAX_AGE_DAYS:
             return None
-    tw = sorted((weights.get(t, DEFAULT_WEIGHT) for t in a.get("topics", [])), reverse=True) or [DEFAULT_WEIGHT]
+    topics = a.get("topics", [])
+    tw = sorted((weights.get(t, DEFAULT_WEIGHT) for t in topics), reverse=True) or [DEFAULT_WEIGHT]
     relevance = sum(tw[:2]) / len(tw[:2])
+    # the label the reader cares most about; on a tie the analyzer's first-listed wins
+    top_topic = max(topics, key=lambda t: (weights.get(t, DEFAULT_WEIGHT), -topics.index(t))) if topics else None
     quality = (a["hardWon"]["score"] + a["grounded"]["score"]) / 2
     priority = WEIGHTS["relevance"] * relevance + WEIGHTS["quality"] * quality
     notes = []
@@ -80,7 +83,7 @@ def score(item: dict, weights: dict[str, int], today: date) -> tuple[float, dict
     if item.get("mustRead"):
         priority += 3
         notes.append("must read")
-    return priority, {"relevance": round(relevance, 1), "quality": round(quality, 1), "notes": notes}
+    return priority, {"relevance": round(relevance, 1), "quality": round(quality, 1), "topTopic": top_topic, "notes": notes}
 
 
 def minutes(item: dict) -> int:

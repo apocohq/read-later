@@ -71,6 +71,7 @@ def entry(root: Path, e: dict, bucket: str) -> dict:
         "category": a.get("category"),
         "contentType": a.get("contentType"),
         "topics": a.get("topics", []),
+        "topTopic": e.get("topTopic") or (a.get("topics") or [None])[0],
         "tldr": a.get("tldr"),
         "keyClaims": a.get("keyClaims", []),
         "hardWon": a.get("hardWon"),

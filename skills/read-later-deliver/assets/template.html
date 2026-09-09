@@ -34,7 +34,7 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 .shelf{margin-top:34px}
 .shelf h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);margin:0 0 14px;display:flex;gap:10px;align-items:baseline}
 .shelf h2 small{letter-spacing:0;text-transform:none;color:var(--ink3);font-weight:400}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:22px 18px;padding-bottom:22px;position:relative}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:24px 20px;padding-bottom:22px;position:relative}
 .grid::after{content:"";position:absolute;left:-8px;right:-8px;bottom:0;height:8px;background:var(--bg2);border-radius:4px;box-shadow:inset 0 2px 3px rgba(0,0,0,.08)}
 .grid.hidden{display:none}
 .empty{color:var(--ink3);font-style:italic;font-size:14px;padding:8px 0 22px}
@@ -46,10 +46,13 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 .cover::before{content:"";position:absolute;left:0;top:0;bottom:0;width:7px;background:linear-gradient(90deg,rgba(0,0,0,.28),rgba(255,255,255,.08));}
 .cover::after{content:"";position:absolute;right:0;top:0;bottom:0;width:3px;background:repeating-linear-gradient(180deg,rgba(255,255,255,.5) 0 1px,rgba(0,0,0,.15) 1px 2px);opacity:.7}
 .tile:hover .cover{transform:translateY(-3px) rotate(-.4deg);box-shadow:0 2px 3px rgba(40,30,20,.14),0 18px 30px -14px rgba(40,30,20,.5)}
+.cover .head{display:grid;gap:5px;min-width:0}
 .cover .kicker{font-size:10px;letter-spacing:.14em;text-transform:uppercase;opacity:.9;display:flex;justify-content:space-between;align-items:center;gap:6px;min-width:0}
+.cover .topic{font-size:11.5px;letter-spacing:.02em;opacity:.72;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:9px;position:relative}
+.cover .topic::before{content:"";position:absolute;left:0;top:50%;width:4px;height:1px;background:currentColor;opacity:.8}
 .cover .kicker .cat{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cover .kicker .pill{flex:none;background:#f2c14e;color:#222;border-radius:3px;padding:1px 6px;letter-spacing:.08em;font-weight:700}
-.cover .title{font-size:15px;line-height:1.25;font-weight:600;text-wrap:balance;text-shadow:0 1px 2px rgba(0,0,0,.25);display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
+.cover .title{font-size:16.5px;line-height:1.25;font-weight:600;text-wrap:balance;text-shadow:0 1px 2px rgba(0,0,0,.25);display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
 .cover .foot{font-size:11px;opacity:.9;display:flex;justify-content:space-between;gap:6px}
 .under{display:flex;flex-direction:column;gap:6px;padding:0 2px}
 .bars{display:grid;grid-template-columns:auto 1fr auto;gap:4px 8px;align-items:center;font-size:10.5px;color:var(--ink3)}
@@ -130,7 +133,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
 .toast.show{opacity:1}
 .copybox{display:grid;gap:6px}
 .copybox textarea{width:100%;height:120px;font:12px ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);padding:8px}
-@media (max-width:640px){main{padding:24px 16px 70px}.grid{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:16px 12px}.pane .head,.pane .body{padding-left:20px;padding-right:20px}}
+@media (max-width:640px){main{padding:24px 16px 70px}.grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px 12px}.cover .title{font-size:15px}.pane .head,.pane .body{padding-left:20px;padding-right:20px}}
 @media (prefers-reduced-motion:reduce){.pane{animation:none}.tile:hover .cover{transform:none}}
 </style>
 </head>
@@ -178,7 +181,10 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
     const b = document.createElement('button'); b.className = 'tile'; b.setAttribute('aria-label', it.title || it.url);
     b.innerHTML = `
       <div class="cover" style="${colors(it.category)}">
-        <div class="kicker"><span class="cat">${esc(it.category||'')}</span>${it.mustRead ? '<span class="pill">must</span>' : ''}</div>
+        <div class="head">
+          <div class="kicker"><span class="cat">${esc(it.category||'')}</span>${it.mustRead ? '<span class="pill">must</span>' : ''}</div>
+          ${it.topTopic ? `<div class="topic">${esc(it.topTopic)}</div>` : ''}
+        </div>
         <div class="title serif">${esc(it.title||it.url)}</div>
         <div class="foot"><span>${esc(domain(it.url))}</span><span>${esc(it.minutes)} min${HL.current(it).length ? ' · '+HL.current(it).length+' ✎' : ''}</span></div>
       </div>

@@ -143,7 +143,7 @@ Two flat lists, seeded by `read-later-analyze` from its `references/topics.md`. 
 
 ## Queue — `queue.json`
 
-Written by `read-later-rank`; the only input `read-later-deliver` needs besides the items. Buckets `read_today`, `read_next`, `later`; each entry carries `item`, `title`, `url`, `priority`, `relevance`, `quality`, `minutes`, `tldr`, `category`, `topics`, `notes`. Generated files: change the weights or the script, not these.
+Written by `read-later-rank`; the only input `read-later-deliver` needs besides the items. Buckets `read_today`, `read_next`, `later`; each entry carries `item`, `title`, `url`, `priority`, `relevance`, `quality`, `minutes`, `tldr`, `category`, `topics`, `topTopic` (the heaviest-weighted topic, shown on the cover), `notes`. Generated files: change the weights or the script, not these.
 
 ## Delivery — `queue.html`, `deliver.json`
 
