@@ -67,12 +67,12 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 .cover .topic{font-size:13px;letter-spacing:.01em;opacity:.78;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
 .cover .kicker .cat{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cover .kicker .pill{flex:none;background:#f2c14e;color:#222;border-radius:3px;padding:1px 6px;letter-spacing:.08em;font-weight:700}
+.cover .badge{flex:none;font-size:16px;font-weight:700;letter-spacing:0;text-transform:none;font-variant-numeric:tabular-nums;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.22);border-radius:6px;padding:3px 8px;line-height:1.2}
+.cover .badge small{font-size:10px;font-weight:500;opacity:.75;margin-left:2px}
 .cover .title{font-size:19px;line-height:1.22;font-weight:600;text-wrap:balance;text-shadow:0 1px 2px rgba(0,0,0,.25);display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
-.cover .foot{font-size:11px;opacity:.9;display:flex;justify-content:space-between;gap:6px}
+.cover .foot{font-size:11px;opacity:.95;display:flex;justify-content:space-between;align-items:flex-end;gap:6px}
+.cover .foot .fr{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
 .under{display:flex;flex-direction:column;gap:6px;padding:0 2px}
-.total{display:flex;align-items:baseline;gap:6px;font-size:10.5px;color:var(--ink3);letter-spacing:.08em;text-transform:uppercase}
-.total b{font-size:17px;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:0;margin-left:auto}
-.total .of{color:var(--ink3);letter-spacing:0;font-size:11px}
 .bars{display:grid;grid-template-columns:auto 1fr auto;gap:4px 8px;align-items:center;font-size:10.5px;color:var(--ink3)}
 .bars .v{font-variant-numeric:tabular-nums;color:var(--ink2);min-width:1.6em;text-align:right}
 .bar{display:grid;grid-template-columns:repeat(10,1fr);gap:2px;height:5px}
@@ -190,8 +190,8 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
   const colors = cat => { const [h,s] = HUES[cat] || HUES.other; return `--c1:hsl(${h} ${s}% 34%);--c2:hsl(${(h+18)%360} ${Math.max(20,s-10)}% 22%)`; };
   const slots = v => { const n = Math.round(Math.max(0, Math.min(10, Number(v)||0))); return Array.from({length:10}, (_,i) => `<i class="${i < n ? 'on' : ''}"></i>`).join(''); };
   const num = v => v == null ? '–' : (Number.isInteger(Number(v)) ? String(v) : Number(v).toFixed(1));
-  // overall score: rank's priority (0-10, must-read can push it over) shown as 0-5 with two decimals
-  const score5 = v => v == null ? '–' : (Math.max(0, Math.min(10, Number(v))) / 2).toFixed(2);
+  // overall score: rank's priority, 0-10 (must-read can push it over, so clamp), two decimals
+  const score10 = v => v == null ? '–' : Math.max(0, Math.min(10, Number(v))).toFixed(2);
 
   document.getElementById('sub').textContent = `${items.length} saved · generated ${(DATA.generatedAt||'').replace('T',' ').replace(/:\d\d(\.\d+)?Z$/,' UTC')}`;
 
@@ -214,10 +214,9 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
           ${it.topTopic ? `<div class="topic">${esc(it.topTopic)}</div>` : ''}
         </div>
         <div class="title serif">${esc(it.title||it.url)}</div>
-        <div class="foot"><span>${esc(domain(it.url))}</span><span>${esc(it.minutes)} min${HL.current(it).length ? ' · '+HL.current(it).length+' ✎' : ''}</span></div>
+        <div class="foot"><span>${esc(domain(it.url))}</span><span class="fr"><span class="badge" title="Overall score: half relevance, half quality; long reads lose a point, must-read gains three">${score10(it.priority)}<small>/10</small></span><span>${esc(it.minutes)} min${HL.current(it).length ? ' · '+HL.current(it).length+' ✎' : ''}</span></span></div>
       </div>
       <div class="under">
-        <div class="total" title="Overall score: half relevance, half quality; long reads lose a point, must-read gains three"><span>score</span><b>${score5(it.priority)}</b><span class="of">/ 5</span></div>
         <div class="bars">
           <span>relevance</span><div class="bar rl">${slots(it.relevance)}</div><span class="v">${num(it.relevance)}</span>
           <span>hard-won</span><div class="bar hw">${slots(it.hardWon&&it.hardWon.score)}</div><span class="v">${num(it.hardWon&&it.hardWon.score)}</span>
@@ -385,7 +384,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
         <div style="min-width:0;flex:1">
           <h2 id="r-title" class="serif">${esc(it.title||it.url)}</h2>
           <div class="meta">
-            <span title="Overall score, 0-5"><b>${score5(it.priority)}</b> / 5</span><span>${esc(domain(it.url))}</span>${it.author ? `<span>${esc(it.author)}</span>` : ''}${it.published ? `<span>${esc(it.published)}</span>` : ''}
+            <span title="Overall score, 0-10"><b>${score10(it.priority)}</b> / 10</span><span>${esc(domain(it.url))}</span>${it.author ? `<span>${esc(it.author)}</span>` : ''}${it.published ? `<span>${esc(it.published)}</span>` : ''}
             <span>${esc(it.minutes)} min</span><span>${esc(it.category)}${it.contentType ? ' · '+esc(it.contentType) : ''}</span>
             <a href="${esc(it.url)}" target="_blank" rel="noopener">Open original ↗</a>
           </div>
