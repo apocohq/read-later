@@ -250,7 +250,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       .replace(/\[([^\]]+)\]\(([^)\s]+)[^)]*\)/g, (m,t,u) => /^https?:\/\//.test(u) ? `<a href="${u}" target="_blank" rel="noopener">${t}</a>` : t)
       .replace(/`([^`]+)`/g, '<code>$1</code>')
       .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>')
-      .replace(/&lt;br\s*\/?&gt;/gi, '<br>');
+      .replace(/&lt;br\s*\/?&gt;/gi, '<br>').replace(/&lt;\/?mark&gt;/gi, '');  // PDF extraction leftovers in older items
     // pipe tables (PDF extraction and many blogs): header row, separator row, body rows; cells may hold <br>
     const cells = r => r.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => inline(c.trim()));
     const isRow = s => /^\s*\|/.test(s || ''), isSep = s => /^\s*\|?\s*:?-{3,}/.test(s || '') && (s || '').includes('|');
