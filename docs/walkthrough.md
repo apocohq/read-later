@@ -38,7 +38,7 @@ Authorization: Bearer pk_…          # scope agents:operate, bound to the one a
 }
 ```
 
-Nothing flows back to the browser. The extension keeps its own local list of saved URLs for the icon state.
+Nothing flows back to the browser. The extension keeps its own local list of saved URLs (with a `done` flag for finished ones) for the icon state.
 
 **Tested:** a bookmark in Chrome lands as a file in `~/work/read-later/inbox/` on the agent.
 
@@ -93,7 +93,7 @@ Known gaps from that run: the analyzer put KubeStellar under `ai-and-agents` whe
 - `read-later-prune` (weekly): moves `done` → `done/`, `archived`/not-an-article/unread-30-days → `archive/`; the agent then weighs new labels and merges duplicates in `topics.md`.
 - Reweighing moved into `read-later-rank`, every run: read `context.md` (pointer to the reader's context, or `NO CONTEXT AVAILABLE` → skip), adjust weights, then rank.
 - Schedules: `read-later-refresh` at 18:00 Prague (ingest → analyze → rank → deliver; named for what it does, the cadence can change), `read-later-prune` weekly. The old `daily` schedule is gone.
-- `INSTALL.md` at the repo root: the whole setup for a new agent.
+- `INSTALL.md` at the repo root: the whole setup for a new agent, from the CLI or by the agent itself (the platform MCP exposes `install_skill` and `create_schedule`).
 
 **Tested on a fresh agent (2026-09-08):** `read-later-test` was created with the CLI and set up by following INSTALL.md step by step (model connection, network preset, five skills, `context.md` with `NO CONTEXT AVAILABLE`, the three test articles seeded into the inbox, both schedules). One scheduled run did ingest (3 extracted) → analyze (3 Invocations, scores 8/7, 8/7, 5/7, three topics coined) → rank (reweigh skipped on the marker, KubeStellar in Read today on the tie-break) → deliver (artifact `Read later` created, version 1, id stored in `deliver.json`). The agent reported and stopped. One correction to INSTALL.md came out of it: the CLI has no `--weekly`, the prune schedule uses `--daily 09:00 --weekdays SU`. Still open from this run: the analyzer put both the Uber and KubeStellar pieces under `ai-and-agents`; all weights are 5 until someone sets them.
 
@@ -102,6 +102,8 @@ Known gaps from that run: the analyzer put KubeStellar under `ai-and-agents` whe
 **Second rehearsal (2026-09-08, `read-later-test2`):** a brand-new agent set up by following INSTALL.md again, this time with only the doc's chat phrase, *"ingest, analyze, rank and deliver read later"*, as the run's instruction. It passed: 3 ingested, 3 analyzed, 3 ranked, artifact created (version 1), report and stop. The skills carry the run without a detailed prompt. Two findings: `dam skill source add` errors when the source is already registered (documented), and a temporary `--every 10m` trigger keeps running until deleted, each tick a short agent turn that ends in "unchanged" (a note for testers, not for INSTALL.md).
 
 **Highlights verified on a temporary agent (2026-09-08):** `read-later-hl-test` was created fresh, the five skills copied from the `feat/highlights` branch, two captures seeded. One refresh turn (`claude -p` over SSH) did ingest → analyze → rank → deliver and created the artifact. A *Done reading* paste with two highlights produced from the published page (jsdom driving the template): the agent wrote `highlights.json` verbatim into the item folder and filed the `done` event through ingest. A *Copy for chat* paste on the unread KubeStellar item stored two highlights and left the status alone. Rank + deliver then published version 2 of the same artifact; loading that page in a fresh browser with no localStorage showed both highlights as synced marks, the note on hover. The done item left the queue as designed. Verified in a real browser afterwards (2026-09-09): the DAM viewer is an `about:srcdoc` frame with a null origin, so localStorage and `history.replaceState` throw. The page now guards both; highlights live in memory while the page is open and a warning says to copy them before leaving. Better storage support is a DAM change for the next iteration.
+
+**Both install paths rehearsed on fresh agents (2026-09-09):** `rl-cli-test` was set up from the CLI by following INSTALL.md section B literally (five skills, `context.md` with the marker, two schedules). `rl-self-test` got the single chat line from section A pointing at the branch's INSTALL.md; with only its platform tools it installed the five skills onto itself at the same commit, created `inbox/`, wrote the marker `context.md` after finding no reader files, ran ingest once for the dependencies, created both schedules with the task texts verbatim (checked with `dam schedule get`), skipped the git step because `~/work` is not a repo, and reported what remained for the owner. One seeded bookmark and the "ingest, analyze, rank and deliver read later" phrase then produced a `Read later` artifact on each agent.
 
 ## Where things stand
 

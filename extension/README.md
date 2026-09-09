@@ -18,13 +18,13 @@ No Slack app, no GitHub token. The only credential is a DAM API key.
 
 ## Use
 
-- Toolbar icon or `Alt+Shift+R`: *Read later*. Click the icon again on a saved page to remove it (the agent drops it if unprocessed, archives it otherwise).
+- Toolbar icon or `Alt+Shift+R`: *Read later*. Click the icon again on a saved page to remove it (the agent drops it if unprocessed, archives it otherwise). On a page you already marked as read, the click puts it back in the queue.
 - `Alt+Shift+M`, or *Read later (must read)* from the right-click menu on a page or on the toolbar icon: never filtered out, boosted in the queue.
-- *Mark as read* in the same menus sends a `done` event; the agent moves the item to `done/` and it leaves the queue.
+- *Mark as read* in the same menus sends a `done` event; the agent moves the item to `done/` and it leaves the queue. The icon turns into a grey bookmark with a check, and stays that way when you come back to the page.
 - *Remove from Read Later* is also in both menus.
 - Select text first to attach it as a hint about why the page matters.
-- The toolbar icon tells you what happened: a grey dashed outline marching around the bookmark while uploading, a green bookmark with a check when saved, a gold solid bookmark with the check cut out for must read, a grey exclamation mark for a failure (details in the service worker console). Idle and error states stay in the same grey as the other toolbar icons, so colour only ever means "this page is in your queue".
-- The extension remembers what it sent (locally, per browser profile) and shows the saved icon again when you return to that page. Tracking parameters and fragments are ignored when matching.
+- The toolbar icon tells you what happened: a grey dashed outline marching around the bookmark while uploading, a green bookmark with a check when saved, a gold solid bookmark with the check cut out for must read, a grey bookmark with a check once you marked it as read, a grey exclamation mark for a failure (details in the service worker console). Idle, done and error states stay in the same grey as the other toolbar icons, so colour only ever means "this page is in your queue".
+- The extension remembers what it sent (locally, per browser profile) and shows the saved or done icon again when you return to that page. Tracking parameters and fragments are ignored when matching.
 
 The upload wakes a hibernated agent, so the first capture after a quiet period can take up to two minutes. Later ones are instant.
 

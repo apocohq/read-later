@@ -9,7 +9,7 @@ Chrome extension ─▶ inbox/<id>.json ─▶ ingest ─▶ items/ ─▶ analy
 
 - `extension/` — the Chrome extension. Setup in `extension/README.md`.
 - `skills/` — the agent skills, one per capability: `read-later-ingest` (inbox → articles), `read-later-analyze` (articles → TL;DR, category, topics, scores), `read-later-rank` (weights + scores → tonight's queue), `read-later-deliver` (queue → one artifact), `read-later-prune` (weekly housekeeping).
-- `INSTALL.md` — setting up an agent, end to end.
+- `INSTALL.md` — setting up an agent, end to end, by telling the agent or from the CLI.
 - `docs/walkthrough.md` — how it was built, what was tested, what is next.
 - `docs/design.md` — the decisions behind it.
 
@@ -22,7 +22,17 @@ Chrome extension ─▶ inbox/<id>.json ─▶ ingest ─▶ items/ ─▶ analy
 
 ## Install
 
-See `INSTALL.md`. In short: one DAM agent with a model connection, five skills installed from this repo, the extension pointed at the agent, two schedules.
+One DAM agent with a model connection and network access (the owner grants both, once). Then either:
+
+- **Tell the agent.** Paste into its chat:
+
+  > Install read-later on yourself as described in https://raw.githubusercontent.com/apocohq/read-later/main/INSTALL.md
+
+  The agent installs the five skills onto itself, writes its reader context, creates the two schedules, and reports back. Works on any DAM agent that is already running.
+
+- **From the CLI.** `dam skill install` for the five skills, `dam file put` for the context file, `dam schedule create` twice.
+
+Both paths and the extension setup are in `INSTALL.md`.
 
 ## Versioning
 
