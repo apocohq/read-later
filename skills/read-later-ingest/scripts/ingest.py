@@ -197,7 +197,12 @@ def extract_pdf(data: bytes, extracted_by: str) -> dict | None:
     except Exception as e:  # noqa: BLE001
         print(f"pdf extraction failed: {e}", file=sys.stderr)
         return None
-    md = HEADING.sub(lambda m: m.group(1).replace("**", "").rstrip(), md)  # the layout model bold-wraps headings
+    md = HEADING.sub(lambda m: re.sub(r"^(#+ )_(.+?)_$", r"\1\2", m.group(1).replace("**", "").rstrip()), md)  # headings come bold- or italic-wrapped
+    md = re.sub(r"<!-- Start of picture text -->\s*(.*?)\s*<!-- End of picture text -->",
+                lambda m: "```\n" + re.sub(r"<br\s*/?>", "\n", m.group(1)).strip() + "\n```", md, flags=re.S)  # ASCII diagrams as code
+    md = re.sub(r"</?mark>", "", md)  # code spans come wrapped in <mark>
+    md = re.sub(r"<!--.*?-->", "", md, flags=re.S)
+    md = re.sub(r"^[ \t]*[-*][ \t]*\n", "", md, flags=re.M)  # empty bullets from list glyphs the layout model split off
     md = re.sub(r"\n{3,}", "\n\n", md).strip()
     words = len(md.split())
     if words < MIN_WORDS:

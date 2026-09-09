@@ -120,7 +120,7 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 .article p{margin:0 0 1em}.article img{max-width:100%;height:auto;border-radius:6px;margin:.4em 0}
 .article a{color:var(--accent)}.article blockquote{margin:1em 0;padding:.2em 1em;border-left:3px solid var(--line);color:var(--ink2)}
 .article pre{background:var(--bg2);padding:12px 14px;border-radius:6px;overflow:auto;font-size:13.5px}.article code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.92em}
-.article ul,.article ol{padding-left:1.4em}.article li{margin:.25em 0}.article table{border-collapse:collapse;font-size:14px}.article td,.article th{border:1px solid var(--line);padding:4px 8px}
+.article ul,.article ol{padding-left:1.4em}.article li{margin:.25em 0}.article .tbl{overflow-x:auto;margin:1em 0}.article table{border-collapse:collapse;font-size:14px;line-height:1.4}.article td,.article th{border:1px solid var(--line);padding:5px 9px;vertical-align:top}.article th{text-align:left;background:var(--bg2);font-weight:600}
 .article hr{border:0;border-top:1px solid var(--line);margin:1.5em 0}
 .note{font-size:12.5px;color:var(--ink3)}
 
@@ -249,13 +249,21 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       .replace(/!\[([^\]]*)\]\(([^)\s]+)[^)]*\)/g, (m,a,u) => /^https?:\/\//.test(u) ? `<img alt="${a}" src="${u}" loading="lazy">` : '')
       .replace(/\[([^\]]+)\]\(([^)\s]+)[^)]*\)/g, (m,t,u) => /^https?:\/\//.test(u) ? `<a href="${u}" target="_blank" rel="noopener">${t}</a>` : t)
       .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>');
+      .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>')
+      .replace(/&lt;br\s*\/?&gt;/gi, '<br>').replace(/&lt;\/?mark&gt;/gi, '');  // PDF extraction leftovers in older items
+    // pipe tables (PDF extraction and many blogs): header row, separator row, body rows; cells may hold <br>
+    const cells = r => r.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => inline(c.trim()));
+    const isRow = s => /^\s*\|/.test(s || ''), isSep = s => /^\s*\|?\s*:?-{3,}/.test(s || '') && (s || '').includes('|');
+    const table = rows => '<div class="tbl"><table><thead><tr>' + cells(rows[0]).map(c => `<th>${c}</th>`).join('') + '</tr></thead><tbody>' +
+      rows.slice(2).map(r => '<tr>' + cells(r).map(c => `<td>${c}</td>`).join('') + '</tr>').join('') + '</tbody></table></div>';
     const flush = () => { if (para.length){ out.push('<p>'+inline(para.join(' '))+'</p>'); para = []; } if (list){ out.push(`</${list}>`); list = null; } };
-    for (const raw of lines){
-      const l = raw.replace(/\s+$/,'');
+    for (let i = 0; i < lines.length; i++){
+      const raw = lines[i], l = raw.replace(/\s+$/,'');
       if (code !== null){ if (/^```/.test(l)){ out.push('<pre><code>'+esc(code.join('\n'))+'</code></pre>'); code = null; } else code.push(l); continue; }
       if (/^```/.test(l)){ flush(); code = []; continue; }
       if (!l.trim()){ flush(); continue; }
+      if (/^\s*<!--.*-->\s*$/.test(l)){ continue; }
+      if (isRow(l) && isSep(lines[i+1])){ flush(); const rows = []; while (i < lines.length && isRow(lines[i])) rows.push(lines[i++]); i--; out.push(table(rows)); continue; }
       let m;
       if ((m = l.match(/^(#{1,6})\s+(.*)/))){ flush(); const n = Math.min(3, m[1].length); out.push(`<h${n}>${inline(m[2])}</h${n}>`); continue; }
       if (/^(-{3,}|\*{3,})$/.test(l)){ flush(); out.push('<hr>'); continue; }
