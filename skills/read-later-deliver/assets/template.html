@@ -66,17 +66,29 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 .pane .head{padding:26px 36px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--paper);z-index:1;display:flex;gap:18px;align-items:flex-start}
 .pane .head .mini{width:56px;flex:none;aspect-ratio:2/3;border-radius:2px 5px 5px 2px;background:linear-gradient(160deg,var(--c1),var(--c2));box-shadow:var(--shadow)}
 .pane .head h2{margin:0 0 6px;font-size:24px;line-height:1.2;font-weight:600;text-wrap:balance}
-.pane .meta{font-size:13px;color:var(--ink2);display:flex;gap:6px 14px;flex-wrap:wrap}
+.pane .meta{font-size:13px;color:var(--ink2);display:flex;gap:6px 0;flex-wrap:wrap;align-items:center}
+.pane .meta>*+*::before{content:"";display:inline-block;width:1px;height:12px;background:var(--line);margin:0 12px;vertical-align:-1px}
+.tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.ibtn{width:32px;height:32px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0}
+.ibtn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ibtn[aria-pressed="true"]{background:color-mix(in srgb,var(--hl-c) 55%,transparent);border-color:color-mix(in srgb,var(--hl-c) 70%,var(--line));color:var(--ink)}
+.swatches{display:inline-flex;gap:5px;align-items:center;margin:0 4px}
+.sw{width:16px;height:16px;border-radius:999px;border:2px solid transparent;cursor:pointer;padding:0;background:color-mix(in srgb,var(--hl-c) 75%,var(--paper))}
+.sw[aria-pressed="true"]{border-color:var(--ink)}
+.tools .sep{width:1px;height:18px;background:var(--line);margin:0 4px}
+.tools .chip{padding:4px 10px;font-size:12.5px}
 .pane .meta a{color:var(--accent);text-decoration:none}.pane .meta a:hover{text-decoration:underline}
 .close{margin-left:auto;flex:none;border:1px solid var(--line);background:transparent;color:var(--ink2);border-radius:999px;width:34px;height:34px;cursor:pointer;font-size:18px;line-height:1}
 .pane .body{padding:22px 36px 60px;display:grid;gap:22px}
 .tldr{font-size:17px;line-height:1.5;margin:0}
 .claims{margin:0;padding-left:18px;color:var(--ink)}.claims li{margin:4px 0}
 .scores{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
-.score{border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.score{border:1px solid var(--line);border-radius:8px;padding:12px 14px;cursor:pointer}
+.score .n .chev{color:var(--ink3);font-size:11px;margin-left:6px;transition:transform .15s}.score.open .n .chev{transform:rotate(180deg)}
+.score p{display:none}.score.open p{display:block;margin-top:6px}
 .score .n{display:flex;justify-content:space-between;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
 .score .n b{color:var(--ink);font-size:14px;letter-spacing:0}
-.score .bar{margin:8px 0;height:6px}.score p{margin:0;font-size:13px;color:var(--ink2)}
+.score .bar{margin:8px 0 0;height:6px}.score p{margin:0;font-size:13px;color:var(--ink2)}
 .tags{display:flex;gap:6px;flex-wrap:wrap}.tag{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:2px 9px;color:var(--ink2)}
 .divider{display:flex;align-items:center;gap:12px;color:var(--ink3);font-size:12px;letter-spacing:.12em;text-transform:uppercase}
 .divider::before,.divider::after{content:"";flex:1;border-top:1px solid var(--line)}
@@ -91,14 +103,13 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 
 /* highlights */
 .pane{position:relative}
-.hls{border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:grid;gap:10px}
+.hls{display:grid;gap:10px}
 .hls .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .hls .row .n{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-right:auto}
 .hls .row .n b{color:var(--ink);letter-spacing:0;font-size:14px}
-.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .hls ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
 .hls li{font-size:14px;line-height:1.45;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start}
-.hls li .q{border-left:3px solid var(--accent2);padding-left:10px;color:var(--ink);cursor:pointer}
+.hls li .q{border-left:3px solid color-mix(in srgb,var(--hl-c) 80%,var(--ink3));padding-left:10px;color:var(--ink);cursor:pointer}
 .hls li .q:hover{color:var(--accent)}
 .hls li .q .nt{display:block;color:var(--ink2);font-size:13px;margin-top:2px}
 .hls li .q.orphan{border-left-color:var(--line);color:var(--ink3)}
@@ -108,10 +119,10 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 .hls .warn{font-size:12.5px;color:var(--accent);margin:0}
 .article.hl-on{cursor:text}
 .article.hl-on ::selection{background:color-mix(in srgb,var(--accent2) 55%,transparent)}
-mark.hl{background:color-mix(in srgb,var(--accent2) 42%,transparent);color:inherit;border-radius:2px;padding:0 1px;cursor:pointer}
-mark.hl.local{box-shadow:inset 0 -2px 0 var(--accent)}
-mark.hl.noted{text-decoration:underline dotted var(--accent) 2px;text-underline-offset:3px}
-mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
+/* highlight colors: one variable, set per element by data-c; nothing here changes layout */
+[data-c=yellow]{--hl-c:#f2d34d}[data-c=green]{--hl-c:#8fd18b}[data-c=blue]{--hl-c:#7fb8f0}[data-c=pink]{--hl-c:#f095bd}[data-c=orange]{--hl-c:#f3a95a}
+mark.hl{background:color-mix(in srgb,var(--hl-c) 50%,transparent);color:inherit;padding:0;border:0;border-radius:0;cursor:pointer}
+mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
 .pop{position:absolute;z-index:3;background:var(--paper);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);padding:8px;display:grid;gap:6px;width:min(320px,calc(100% - 40px))}
 .pop input{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:6px;padding:6px 8px;font:inherit;font-size:13px;width:100%}
 .pop .row{display:flex;gap:6px;justify-content:flex-end}
@@ -229,6 +240,10 @@ mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
     const CTX = 32;
     const key = id => 'rl:hl:' + id;
     let storageOk = true;
+    const COLORS = ['yellow','green','blue','pink','orange'];
+    let colorMem = 'yellow';
+    const getColor = () => { try { const c = localStorage.getItem('rl:hl:color'); return COLORS.includes(c) ? c : colorMem; } catch { return colorMem; } };
+    const setColor = c => { if (!COLORS.includes(c)) return; colorMem = c; try { localStorage.setItem('rl:hl:color', c); } catch {} };
     const mem = {};  // fallback when localStorage is unavailable (opaque origin): highlights live as long as the page is open
     const TOMBSTONE_MS = 30 * 24 * 3600 * 1000;
     const cssEsc = v => (window.CSS && CSS.escape) ? CSS.escape(v) : String(v).replace(/["\\]/g, '\\$&');
@@ -271,7 +286,7 @@ mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       const r = sel.getRangeAt(0); if (!root.contains(r.startContainer) || !root.contains(r.endContainer)) return null;
       const exact = r.toString(); if (!exact.trim()) return null;
       const start = offsetOf(root, r.startContainer, r.startOffset), end = start + exact.length, text = root.textContent;
-      return { id: newId(), exact, prefix: text.slice(Math.max(0, start - CTX), start), suffix: text.slice(end, end + CTX), start, end, createdAt: new Date().toISOString() };
+      return { id: newId(), exact, prefix: text.slice(Math.max(0, start - CTX), start), suffix: text.slice(end, end + CTX), start, end, color: getColor(), createdAt: new Date().toISOString() };
     }
     function locate(text, h){
       if (Number.isInteger(h.start) && text.slice(h.start, h.start + h.exact.length) === h.exact) return h.start;
@@ -292,7 +307,7 @@ mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
         const m = mk(); node.parentNode.insertBefore(m, node); m.appendChild(node);
       }
     }
-    function decorate(m, it, h){ m.className = 'hl' + (isLocal(it, h.id) ? ' local' : '') + (h.note ? ' noted' : ''); m.dataset.id = h.id; if (h.note) m.title = h.note; else m.removeAttribute('title'); return m; }
+    function decorate(m, it, h){ m.className = 'hl'; m.dataset.id = h.id; m.dataset.c = COLORS.includes(h.color) ? h.color : 'yellow'; if (h.note) m.title = h.note; else m.removeAttribute('title'); return m; }
     // Marks add no text, so offsets into root.textContent stay valid with other highlights already in place.
     function applyOne(root, it, h){
       const at = locate(root.textContent, h); if (at < 0) return false;
@@ -306,7 +321,7 @@ mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
     function restyle(root, it, id){ const h = current(it).find(x => x.id === id); root.querySelectorAll(`mark.hl[data-id="${cssEsc(id)}"]`).forEach(m => h && decorate(m, it, h)); }
     // --- outbox: the payload is highlights.json itself. Today it goes to the clipboard and the reader pastes it to the agent,
     // which writes it into the item folder verbatim; later the artifact writes the file. "done" adds one line for the agent.
-    const file = it => ({ item: it.id, url: it.url, updatedAt: new Date().toISOString(), highlights: current(it).map(({id, exact, prefix, suffix, start, end, note, createdAt}) => ({id, exact, prefix, suffix, start, end, ...(note ? {note} : {}), createdAt})) });
+    const file = it => ({ item: it.id, url: it.url, updatedAt: new Date().toISOString(), highlights: current(it).map(({id, exact, prefix, suffix, start, end, color, note, createdAt}) => ({id, exact, prefix, suffix, start, end, ...(color ? {color} : {}), ...(note ? {note} : {}), createdAt})) });
     // A page that never saw any highlights, synced or local, sends no file at all, so a "done" from a stale browser cannot wipe what another device sent.
     const payload = (it, action) => {
       const hasFile = current(it).length || synced(it).length;
@@ -319,7 +334,8 @@ mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       async (text, action, ui) => { try { await navigator.clipboard.writeText(text); ui.toast(action === 'done' ? 'Copied. Paste it to your agent to finish this article.' : 'Copied. Paste it to your agent.'); } catch { ui.fallback(text); } return true; },
     ];
     async function emit(it, action, ui){ const text = payload(it, action); for (const t of transports) if (await t(text, action, ui)) return text; return null; }
-    return { current, isLocal, add, remove, setNote, fromSelection, apply, applyOne, unwrap, restyle, emit, cssEsc, storageOk: () => storageOk };
+    function setColorOf(it, id, color){ const st = state(it); const mine = st.added.find(h => h.id === id); if (mine){ mine.color = color; save(it, st); return; } const src = synced(it).find(h => h.id === id); if (!src) return; st.added.push({...src, id: newId('h'), color}); if (!st.deleted.some(d => d.id === id)) st.deleted.push({id, at: Date.now()}); save(it, st); }
+    return { current, isLocal, add, remove, setNote, setColorOf, fromSelection, apply, applyOne, unwrap, restyle, emit, cssEsc, COLORS, getColor, setColor, storageOk: () => storageOk };
   })();
 
   const toastEl = document.getElementById('toast'); let toastTimer;
@@ -327,33 +343,37 @@ mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
 
   const reader = document.getElementById('reader'), pane = document.getElementById('pane');
   function open(it){
-    const sc = (k, label) => { const s = it[k] || {}; return `<div class="score"><div class="n"><span>${label}</span><b>${esc(s.score ?? '–')}<span style="color:var(--ink3);font-size:11px"> /10</span></b></div><div class="bar ${k==='hardWon'?'hw':'gr'}">${slots(s.score)}</div><p>${esc(s.reason||'')}</p></div>`; };
+    const sc = (k, label, cls, score, reason) => `<div class="score" data-k="${k}" role="button" tabindex="0" aria-expanded="false"><div class="n"><span>${label}<span class="chev">▾</span></span><b>${esc(score ?? '–')}<span style="color:var(--ink3);font-size:11px"> /10</span></b></div><div class="bar ${cls}">${slots(score)}</div><p>${esc(reason||'')}</p></div>`;
     pane.innerHTML = `
       <div class="head">
         <div class="mini" style="${colors(it.category)}"></div>
-        <div style="min-width:0">
+        <div style="min-width:0;flex:1">
           <h2 id="r-title" class="serif">${esc(it.title||it.url)}</h2>
           <div class="meta">
             <span>${esc(domain(it.url))}</span>${it.author ? `<span>${esc(it.author)}</span>` : ''}${it.published ? `<span>${esc(it.published)}</span>` : ''}
-            <span>${esc(it.minutes)} min · ${esc(it.words)} words</span><span>${esc(it.category)}${it.contentType ? ' · '+esc(it.contentType) : ''}</span>
+            <span>${esc(it.minutes)} min</span><span>${esc(it.category)}${it.contentType ? ' · '+esc(it.contentType) : ''}</span>
             <a href="${esc(it.url)}" target="_blank" rel="noopener">Open original ↗</a>
           </div>
+          <div class="tools" id="tools"></div>
         </div>
         <button class="close" aria-label="Close">×</button>
       </div>
       <div class="body">
+        <div class="divider">TL;DR</div>
         <p class="tldr serif">${esc(it.tldr||'')}</p>
         ${(it.keyClaims||[]).length ? `<ul class="claims">${it.keyClaims.map(c=>`<li>${esc(c)}</li>`).join('')}</ul>` : ''}
         <div class="scores">
-          ${sc('hardWon','hard-won')}${sc('grounded','grounded')}
-          <div class="score"><div class="n"><span>relevance</span><b>${esc(it.relevance ?? '–')}<span style="color:var(--ink3);font-size:11px"> /10</span></b></div><div class="bar rl">${slots(it.relevance)}</div><p>From the weights of its topics in topics.md. Priority ${esc(it.priority)}${(it.notes||[]).length ? ' · '+esc(it.notes.join(', ')) : ''}.</p></div>
+          ${sc('hardWon','hard-won','hw',(it.hardWon||{}).score,(it.hardWon||{}).reason)}${sc('grounded','grounded','gr',(it.grounded||{}).score,(it.grounded||{}).reason)}
+          ${sc('relevance','relevance','rl',it.relevance,`From the weights of its topics in topics.md. Priority ${it.priority}${(it.notes||[]).length ? ' · '+it.notes.join(', ') : ''}.`)}
         </div>
         <div class="tags">${(it.topics||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>
-        <div class="hls" id="hls"></div>
         <div class="divider">The article</div>
         <div class="article serif" id="article"></div>
+        <div class="divider">Highlights</div>
+        <div class="hls" id="hls"></div>
       </div>`;
     pane.querySelector('.close').addEventListener('click', close);
+    pane.querySelectorAll('.score').forEach(c => { const t = () => { const on = !c.classList.contains('open'); pane.querySelectorAll('.score').forEach(o => { o.classList.remove('open'); o.setAttribute('aria-expanded', 'false'); }); if (on){ c.classList.add('open'); c.setAttribute('aria-expanded', 'true'); } }; c.addEventListener('click', t); c.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); t(); } }); });
     reader.classList.add('open'); document.body.style.overflow = 'hidden'; pane.scrollTop = 0;
     mountHighlights(it);
     setHash('#'+encodeURIComponent(it.id||''));
@@ -365,38 +385,46 @@ mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
   // --- highlighter UI inside the reader ---
   let hlOn = false, pop = null;
   function closePop(){ if (pop){ pop.remove(); pop = null; } }
+  const PEN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 20H4l6.5-6.5"/><path d="M15.5 4.5l4 4L10 18l-4-4z"/><path d="M13 7l4 4"/></svg>';
   function mountHighlights(it){
-    const article = document.getElementById('article'), panel = document.getElementById('hls');
+    const article = document.getElementById('article'), panel = document.getElementById('hls'), tools = document.getElementById('tools');
     let orphans = [];
     function renderArticle(){
       article.innerHTML = it.markdown ? md(it.markdown) : '<p class="note">Full text not included.</p>';
       orphans = HL.apply(article, it);
       article.classList.toggle('hl-on', hlOn);
     }
+    function renderTools(){
+      const list = HL.current(it), color = HL.getColor();
+      tools.innerHTML = `
+        <button class="ibtn" id="hl-toggle" data-c="${color}" aria-pressed="${hlOn}" title="${hlOn ? 'Highlighter on' : 'Highlighter off'}" aria-label="Highlighter">${PEN}</button>
+        ${hlOn ? `<span class="swatches" role="radiogroup" aria-label="Highlight color">${HL.COLORS.map(c => `<button class="sw" data-c="${c}" aria-pressed="${c === color}" title="${c}" aria-label="${c}"></button>`).join('')}</span>` : ''}
+        <span class="sep"></span>
+        <button class="chip" id="hl-copy" ${list.length ? '' : 'disabled'} title="Copy highlights.json for your agent">Copy for chat</button>
+        <button class="chip" id="hl-done" title="Copy a done message, with the highlights, for your agent">Done reading</button>`;
+      tools.querySelector('#hl-toggle').addEventListener('click', () => { hlOn = !hlOn; closePop(); article.classList.toggle('hl-on', hlOn); renderTools(); renderPanel(); });
+      tools.querySelectorAll('.sw').forEach(b => b.addEventListener('click', () => { HL.setColor(b.dataset.c); renderTools(); }));
+      tools.querySelector('#hl-copy').addEventListener('click', () => HL.emit(it, 'highlight', ui));
+      tools.querySelector('#hl-done').addEventListener('click', () => HL.emit(it, 'done', ui));
+    }
     function renderPanel(){
       const list = HL.current(it), unsent = list.filter(h => HL.isLocal(it, h.id)).length;
       panel.innerHTML = `
-        <div class="row">
-          <span class="n">Highlights <b>${list.length}</b>${unsent ? ` <span title="not yet sent to the agent">· ${unsent} unsent</span>` : ''}</span>
-          <button class="chip ${hlOn ? 'on' : ''}" id="hl-toggle" aria-pressed="${hlOn}">${hlOn ? 'Highlighter on' : 'Highlighter off'}</button>
-          <button class="chip" id="hl-copy" ${list.length ? '' : 'disabled'} title="Copy highlights.json for your agent">Copy for chat</button>
-          <button class="chip" id="hl-done" title="Copy a done message, with the highlights, for your agent">Done reading</button>
-        </div>
-        ${list.length ? `<ul>${list.map(h => `<li><div class="q ${orphans.includes(h.id) ? 'orphan' : ''}" data-id="${esc(h.id)}" title="${orphans.includes(h.id) ? 'Not found in this text' : 'Show in the article'}">${esc(h.exact.length > 220 ? h.exact.slice(0, 220) + '…' : h.exact)}${h.note ? `<span class="nt">${esc(h.note)}</span>` : ''}</div><button class="x" data-id="${esc(h.id)}" aria-label="Remove highlight" title="Remove">×</button></li>`).join('')}</ul>` : `<p class="hint">${hlOn ? 'Select text in the article to highlight it. Click a highlight for a note or to remove it.' : 'Turn the highlighter on, then select text in the article.'}</p>`}
+        ${list.length ? `<div class="row"><span class="n"><b>${list.length}</b> ${list.length === 1 ? 'highlight' : 'highlights'}${unsent ? ` <span title="not yet sent to the agent">· ${unsent} unsent</span>` : ''}</span></div>` : ''}
+        ${list.length ? `<ul>${list.map(h => `<li><div class="q ${orphans.includes(h.id) ? 'orphan' : ''}" data-c="${esc(HL.COLORS.includes(h.color) ? h.color : 'yellow')}" data-id="${esc(h.id)}" title="${orphans.includes(h.id) ? 'Not found in this text' : 'Show in the article'}">${esc(h.exact.length > 220 ? h.exact.slice(0, 220) + '…' : h.exact)}${h.note ? `<span class="nt">${esc(h.note)}</span>` : ''}</div><button class="x" data-id="${esc(h.id)}" aria-label="Remove highlight" title="Remove">×</button></li>`).join('')}</ul>` : `<p class="hint">${hlOn ? 'Select text in the article to highlight it. Click a highlight for a note or to remove it.' : 'Turn the highlighter on (pen icon at the top), then select text in the article.'}</p>`}
         ${HL.storageOk() ? '' : '<p class="warn">This viewer does not keep highlights after the page closes or reloads. Use Copy for chat or Done reading before you leave.</p>'}
         <div class="copybox" id="copybox" hidden></div>`;
-      panel.querySelector('#hl-toggle').addEventListener('click', () => { hlOn = !hlOn; closePop(); renderPanel(); article.classList.toggle('hl-on', hlOn); });
-      panel.querySelector('#hl-copy').addEventListener('click', () => HL.emit(it, 'highlight', ui));
-      panel.querySelector('#hl-done').addEventListener('click', () => HL.emit(it, 'done', ui));
       panel.querySelectorAll('.q').forEach(q => q.addEventListener('click', () => { const m = article.querySelector(`mark.hl[data-id="${HL.cssEsc(q.dataset.id)}"]`); if (!m) return; m.scrollIntoView({block:'center', behavior:'smooth'}); m.classList.add('flash'); setTimeout(() => m.classList.remove('flash'), 1200); }));
       panel.querySelectorAll('.x').forEach(x => x.addEventListener('click', () => removeOne(x.dataset.id)));
+      tools.querySelector('#hl-copy').disabled = !list.length;
     }
     const ui = {
       toast,
-      fallback(text){ const box = panel.querySelector('#copybox'); box.hidden = false; box.innerHTML = '<p class="hint">Clipboard unavailable here. Select all and copy, then paste it to your agent.</p><textarea readonly></textarea>'; const ta = box.querySelector('textarea'); ta.value = text; ta.focus(); ta.select(); },
+      fallback(text){ const box = panel.querySelector('#copybox'); box.hidden = false; box.innerHTML = '<p class="hint">Clipboard unavailable here. Select all and copy, then paste it to your agent.</p><textarea readonly></textarea>'; const ta = box.querySelector('textarea'); ta.value = text; ta.focus(); ta.select(); if (box.scrollIntoView) box.scrollIntoView({block:'nearest'}); },
     };
     // Single-highlight changes touch only their marks; the article is parsed once per open, so images and scroll position stay put.
     function removeOne(id){ closePop(); HL.remove(it, id); HL.unwrap(article, id); orphans = orphans.filter(o => o !== id); renderPanel(); }
+    function replaceMark(oldId){ const before = new Set(HL.current(it).map(x => x.id)); return () => { const fresh = HL.current(it).find(x => !before.has(x.id)); if (fresh){ HL.unwrap(article, oldId); if (!HL.applyOne(article, it, fresh)) orphans.push(fresh.id); } else HL.restyle(article, it, oldId); renderPanel(); }; }
     article.addEventListener('pointerup', () => {
       if (!hlOn) return;
       setTimeout(() => { const h = HL.fromSelection(article); if (!h) return; if (HL.current(it).some(x => x.exact === h.exact && x.start === h.start)){ window.getSelection()?.removeAllRanges(); return; } HL.add(it, h); window.getSelection()?.removeAllRanges(); closePop(); if (!HL.applyOne(article, it, h)) orphans.push(h.id); renderPanel(); }, 0);
@@ -406,22 +434,18 @@ mark.hl:target,mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       e.preventDefault(); closePop();
       const h = HL.current(it).find(x => x.id === m.dataset.id); if (!h) return;
       pop = document.createElement('div'); pop.className = 'pop';
-      pop.innerHTML = `<input type="text" placeholder="Add a note" aria-label="Note" value="${esc(h.note||'')}"><div class="row"><button class="chip" data-a="remove">Remove</button><button class="chip" data-a="save">Save</button></div>`;
+      pop.innerHTML = `<input type="text" placeholder="Add a note" aria-label="Note" value="${esc(h.note||'')}"><div class="row"><span class="swatches" aria-label="Color">${HL.COLORS.map(c => `<button class="sw" data-c="${c}" aria-pressed="${c === (h.color||'yellow')}" title="${c}" aria-label="${c}"></button>`).join('')}</span><span style="flex:1"></span><button class="chip" data-a="remove">Remove</button><button class="chip" data-a="save">Save</button></div>`;
       pane.appendChild(pop);
       const r = m.getBoundingClientRect(), pr = pane.getBoundingClientRect();
       pop.style.top = (r.bottom - pr.top + pane.scrollTop + 6) + 'px'; pop.style.left = Math.max(12, Math.min(r.left - pr.left, pr.width - pop.offsetWidth - 12)) + 'px';
       const input = pop.querySelector('input'); input.focus();
-      const saveNote = () => {
-        const before = new Set(HL.current(it).map(x => x.id)); HL.setNote(it, h.id, input.value.trim()); closePop();
-        const after = HL.current(it); const fresh = after.find(x => !before.has(x.id));
-        if (fresh){ HL.unwrap(article, h.id); if (!HL.applyOne(article, it, fresh)) orphans.push(fresh.id); } else HL.restyle(article, it, h.id);
-        renderPanel();
-      };
+      const saveNote = () => { const done = replaceMark(h.id); HL.setNote(it, h.id, input.value.trim()); closePop(); done(); };
       pop.querySelector('[data-a="save"]').addEventListener('click', saveNote);
       input.addEventListener('keydown', ev => { if (ev.key === 'Enter') saveNote(); if (ev.key === 'Escape'){ ev.stopPropagation(); closePop(); } });
       pop.querySelector('[data-a="remove"]').addEventListener('click', () => removeOne(h.id));
+      pop.querySelectorAll('.sw').forEach(b => b.addEventListener('click', () => { const done = replaceMark(h.id); HL.setColorOf(it, h.id, b.dataset.c); closePop(); done(); }));
     });
-    renderArticle(); renderPanel();
+    renderArticle(); renderTools(); renderPanel();
   }
   pane.addEventListener('pointerdown', e => { if (pop && !pop.contains(e.target) && !e.target.closest('mark.hl')) closePop(); });
   reader.addEventListener('click', e => { if (e.target === reader) close(); });

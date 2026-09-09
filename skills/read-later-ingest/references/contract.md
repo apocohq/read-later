@@ -103,6 +103,7 @@ Produced by the library page (`read-later-deliver`), not by ingest. The page kee
       "suffix": ". The rest wait",
       "start": 14210,
       "end": 14254,
+      "color": "yellow",
       "note": "compare with ours",
       "createdAt": "2026-09-08T20:03:11.000Z"
     }
@@ -117,6 +118,7 @@ Produced by the library page (`read-later-deliver`), not by ingest. The page kee
 | `highlights[].id` | chosen by the page, stable for the life of the highlight |
 | `exact`, `prefix`, `suffix` | the highlighted text and up to 32 characters around it: a W3C TextQuoteSelector, the anchor that survives re-rendering |
 | `start`, `end` | character offsets into the rendered article text: a W3C TextPositionSelector, the fast path and the tiebreaker when `exact` occurs twice |
+| `color` | optional, one of `yellow` (default), `green`, `blue`, `pink`, `orange` |
 | `note` | optional, the reader's comment |
 | `createdAt` | when the highlight was made |
 

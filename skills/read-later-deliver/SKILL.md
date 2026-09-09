@@ -8,13 +8,13 @@ metadata:
 
 # Read Later · Deliver
 
-Publishes the reader's library as one self-contained page in the artifact library: a shelf of book-like tiles (Tonight, Next, Later), each with its scores as bars; a click opens the TL;DR, claims, score reasons and the full article text, with a highlighter. One artifact, one link, a new version each time the data changes. Nothing is published when nothing changed.
+Publishes the reader's library as one self-contained page in the artifact library: a shelf of book-like tiles (Tonight, Next, Later), each with its scores as bars; a click opens the TL;DR, claims, scores (reasons on click) and the full article text, with a highlighter. One artifact, one link, a new version each time the data changes. Nothing is published when nothing changed.
 
 The page is `assets/template.html` (design) plus data injected by `scripts/render.py` from `queue.json` and the items' `item.json`, `content.md` and `highlights.json`. To restyle for one reader, copy the template to `~/work/read-later/template.html` and edit; the copy wins.
 
 ## Highlights
 
-In the reader pane the reader turns the highlighter on, selects text, and gets a mark; clicking a mark adds a note or removes it. Highlights live in the reader's browser (localStorage per item, or only in memory in DAM's sandboxed viewer, which the page says) until **Copy for chat** or **Done reading** puts the content of `highlights.json` on the clipboard and the reader pastes it into chat. The renderer injects that file back into the page, so after the next publish the highlights show in every browser; marks not yet sent are underlined and counted as "unsent". The page cannot write to the agent yet; when DAM's artifact bridge ships, the artifact will write the file itself.
+In the reader pane the reader turns the highlighter on (pen icon in the sticky header, with five colors), selects text, and gets a mark; clicking a mark adds a note, changes its color or removes it. The list of highlights sits below the article. Highlights live in the reader's browser (localStorage per item, or only in memory in DAM's sandboxed viewer, which the page says) until **Copy for chat** or **Done reading** puts the content of `highlights.json` on the clipboard and the reader pastes it into chat. The renderer injects that file back into the page, so after the next publish the highlights show in every browser; marks not yet sent are underlined and counted as "unsent". The page cannot write to the agent yet; when DAM's artifact bridge ships, the artifact will write the file itself.
 
 ### When the reader pastes highlights
 
