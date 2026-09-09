@@ -14,7 +14,7 @@ The page is `assets/template.html` (design) plus data injected by `scripts/rende
 
 ## Highlights
 
-In the reader pane the reader turns the highlighter on, selects text, and gets a mark; clicking a mark adds a note or removes it. Highlights live in the reader's browser (localStorage, per item) until **Copy for chat** or **Done reading** puts the content of `highlights.json` on the clipboard and the reader pastes it into chat. The renderer injects that file back into the page, so after the next publish the highlights show in every browser; marks not yet sent are underlined and counted as "unsent". The page cannot write to the agent yet; when DAM's artifact bridge ships, the artifact will write the file itself.
+In the reader pane the reader turns the highlighter on, selects text, and gets a mark; clicking a mark adds a note or removes it. Highlights live in the reader's browser (localStorage per item, or only in memory in DAM's sandboxed viewer, which the page says) until **Copy for chat** or **Done reading** puts the content of `highlights.json` on the clipboard and the reader pastes it into chat. The renderer injects that file back into the page, so after the next publish the highlights show in every browser; marks not yet sent are underlined and counted as "unsent". The page cannot write to the agent yet; when DAM's artifact bridge ships, the artifact will write the file itself.
 
 ### When the reader pastes highlights
 
