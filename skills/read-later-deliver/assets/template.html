@@ -71,7 +71,8 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 .cover .badge small{font-size:10px;font-weight:500;opacity:.75;margin-left:2px}
 .cover .title{font-size:19px;line-height:1.22;font-weight:600;text-wrap:balance;text-shadow:0 1px 2px rgba(0,0,0,.25);display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
 .cover .foot{font-size:11px;opacity:.95;display:flex;justify-content:space-between;align-items:flex-end;gap:6px}
-.cover .foot .fr{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.cover .mid{min-width:0}
+.cover .src{font-size:16px;line-height:1.2;font-weight:500;opacity:.85;margin-bottom:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.25)}
 .under{display:flex;flex-direction:column;gap:6px;padding:0 2px}
 .bars{display:grid;grid-template-columns:auto 1fr auto;gap:4px 8px;align-items:center;font-size:10.5px;color:var(--ink3)}
 .bars .v{font-variant-numeric:tabular-nums;color:var(--ink2);min-width:1.6em;text-align:right}
@@ -213,8 +214,8 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
           <div class="kicker"><span class="cat">${esc(it.category||'')}</span>${it.mustRead ? '<span class="pill">must</span>' : ''}</div>
           ${it.topTopic ? `<div class="topic">${esc(it.topTopic)}</div>` : ''}
         </div>
-        <div class="title serif">${esc(it.title||it.url)}</div>
-        <div class="foot"><span>${esc(domain(it.url))}</span><span class="fr"><span class="badge" title="Overall score: half relevance, half quality; long reads lose a point, must-read gains three">${score10(it.priority)}<small>/10</small></span><span>${esc(it.minutes)} min${HL.current(it).length ? ' · '+HL.current(it).length+' ✎' : ''}</span></span></div>
+        <div class="mid"><div class="src serif">${esc(domain(it.url))}</div><div class="title serif">${esc(it.title||it.url)}</div></div>
+        <div class="foot"><span>${esc(it.minutes)} min${HL.current(it).length ? ' · '+HL.current(it).length+' ✎' : ''}</span><span class="badge" title="Overall score: half relevance, half quality; long reads lose a point, must-read gains three">${score10(it.priority)}<small>/10</small></span></div>
       </div>
       <div class="under">
         <div class="bars">
