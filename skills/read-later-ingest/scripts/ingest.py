@@ -23,6 +23,10 @@ Dedup key is the canonical `url` inside each item.json; there is no separate ind
 Events: `capture` (default) adds a page; `remove` retracts earlier captures of the same URL
 (drops unprocessed ones, archives a processed item); `done` marks a processed item as read.
 
+Failed extractions are retried on later runs by fetching the URL again: at most RETRY_MAX
+attempts, at least RETRY_AFTER_HOURS apart, recorded as `attempts` and `failedAt` on the item.
+After that the item stays `failed` until the reader saves the page again or removes it.
+
 Inbox content is untrusted input. This script parses it; it never executes it.
 
 Exit codes: 0 ran (per-item failures are recorded on the items), 2 bad arguments,
@@ -50,6 +54,8 @@ FETCH_TIMEOUT = 20
 USER_AGENT = "Mozilla/5.0 (compatible; read-later/0.2)"
 TRACKING = re.compile(r"^(utm_|fbclid$|gclid$|mc_|ref$|source$|si$)")
 SLUG_MAX = 60
+RETRY_MAX = 3
+RETRY_AFTER_HOURS = 20
 
 
 def now() -> str:
@@ -347,7 +353,7 @@ def main(argv: list[str]) -> int:
                 item.pop("failure", None)
                 ok += 1
             else:
-                item.update(status="failed", failure=f"no source yielded at least {MIN_WORDS} words")
+                item.update(status="failed", failure=f"no source yielded at least {MIN_WORDS} words", attempts=item.get("attempts", 0) + 1, failedAt=now())
                 failed += 1
         folder = found[0] if found else store.new_folder(evs[0]["capturedAt"], item.get("title"), canonical)
         store.save(folder, item, markdown)
@@ -357,8 +363,43 @@ def main(argv: list[str]) -> int:
             print(json.dumps({"item": f"items/{folder}", "status": item["status"], "title": item.get("title"), "failure": item.get("failure")}))
         else:
             print(f"{item['status']:9} items/{folder}")
-    print(f"done: {ok} extracted, {failed} failed", file=sys.stderr)
+    retried = retry_failed(store, args.json)
+    print(f"done: {ok} extracted, {failed} failed" + (f", {retried} recovered on retry" if retried else ""), file=sys.stderr)
     return 0
+
+
+def retry_failed(store: Store, as_json: bool) -> int:
+    """Fetch failed items again, bounded. Returns how many recovered."""
+    recovered = 0
+    cutoff = datetime.now(timezone.utc).timestamp() - RETRY_AFTER_HOURS * 3600
+    for p in sorted(store.items.glob("*/item.json")):
+        item = json.loads(p.read_text())
+        if item.get("status") != "failed" or item.get("attempts", 1) >= RETRY_MAX:
+            continue
+        last = item.get("failedAt")
+        try:
+            if last and datetime.fromisoformat(last.replace("Z", "+00:00")).timestamp() > cutoff:
+                continue
+        except ValueError:
+            pass
+        folder = p.parent.name
+        if (html := fetch(item["url"])) and (content := extract(html, item["url"], "fetch")):
+            markdown = content.pop("markdown")
+            item.update({k: v for k, v in content.items() if v is not None}, status="extracted")
+            item["title"] = item.get("title") or content.get("title")
+            for k in ("failure", "attempts", "failedAt"):
+                item.pop(k, None)
+            store.save(folder, item, markdown)
+            recovered += 1
+            print(f"retried   items/{folder}  extracted on attempt {item.get('attempts', 0) + 1}", file=sys.stderr)
+        else:
+            item["attempts"] = item.get("attempts", 1) + 1
+            item["failedAt"] = now()
+            store.save(folder, item)
+            print(f"retried   items/{folder}  still failing ({item['attempts']}/{RETRY_MAX})", file=sys.stderr)
+        if as_json:
+            print(json.dumps({"item": f"items/{folder}", "status": item["status"], "title": item.get("title"), "failure": item.get("failure"), "attempts": item.get("attempts")}))
+    return recovered
 
 
 if __name__ == "__main__":

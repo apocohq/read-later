@@ -95,7 +95,8 @@ def main(argv: list[str]) -> int:
         return 3
     queue = json.loads(qpath.read_text())
     items = [entry(root, e, b) for b in BUCKETS for e in queue.get("buckets", {}).get(b, [])]
-    data = {"generatedAt": queue.get("generatedAt"), "items": items}
+    attention = [a for a in queue.get("attention", []) if isinstance(a, dict) and a.get("url")]
+    data = {"generatedAt": queue.get("generatedAt"), "items": items, "attention": attention}
 
     template_path = root / "template.html" if (root / "template.html").exists() else SKILL_DIR / "assets" / "template.html"
     template = template_path.read_text()

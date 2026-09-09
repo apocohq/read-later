@@ -61,7 +61,7 @@ The folder is `<first capture time>-<title slug>`, e.g. `2026-09-07T13-00-00Z-ru
 |---|---|
 | `url` | canonical URL, the item's identity |
 | `title` | from extraction, else from the capture |
-| `status` | `captured` → `extracted` \| `failed` (adds `failure`) → `analyzed` → `done` (adds `doneAt`) \| `archived` |
+| `status` | `captured` → `extracted` \| `failed` (adds `failure`, `attempts`, `failedAt`; ingest re-fetches up to 3 times, a day apart) → `analyzed` → `done` (adds `doneAt`) \| `archived` |
 | | A new `capture` of a `done` item reopens it: status back to `analyzed` (or `extracted` if never analyzed), `doneAt` removed, a `reopen` line in `feedback.jsonl` |
 | `mustRead` | true once any capture said so; never reset |
 | `captures[]` | one per capture: `at`, `source`, and only the user's signals if present: `note`, `selectedText`, `recommendedBy`, `sourceRef` |
@@ -143,7 +143,7 @@ Two flat lists, seeded by `read-later-analyze` from its `references/topics.md`. 
 
 ## Queue — `queue.json`
 
-Written by `read-later-rank`; the only input `read-later-deliver` needs besides the items. Buckets `read_today`, `read_next`, `later`; each entry carries `item`, `title`, `url`, `priority`, `relevance`, `quality`, `minutes`, `tldr`, `category`, `topics`, `topTopic` (the heaviest-weighted topic, shown on the cover), `notes`. Generated files: change the weights or the script, not these.
+Written by `read-later-rank`; the only input `read-later-deliver` needs besides the items. Buckets `read_today`, `read_next`, `later`; each entry carries `item`, `title`, `url`, `priority`, `relevance`, `quality`, `minutes`, `tldr`, `category`, `topics`, `topTopic` (the heaviest-weighted topic, shown on the cover), `notes`. Generated files: change the weights or the script, not these. `attention` lists items the reader has to look at themselves, shown at the top of the library page: `{item, title, url, kind: "fetch" | "analysis", reason, attempts?, at}` for `failed` items and for items whose analysis keeps failing.
 
 ## Delivery — `queue.html`, `deliver.json`
 

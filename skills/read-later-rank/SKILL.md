@@ -12,7 +12,7 @@ Turns analyzed items into a short queue. Relevance comes from the reader's **top
 
 ## Available scripts
 
-- **`scripts/rank.py`** — writes `queue.json` (order, buckets, priority, relevance) into the state dir and prints a short text view. `--help` for flags, `--json` to print the JSON instead.
+- **`scripts/rank.py`** — writes `queue.json` (order, buckets, priority, relevance, and an `attention` list of items whose fetch or analysis failed) into the state dir and prints a short text view. `--help` for flags, `--json` to print the JSON instead.
 
 ## Run
 

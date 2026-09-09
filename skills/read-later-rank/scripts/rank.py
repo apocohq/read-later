@@ -18,7 +18,9 @@ Scoring, per item, all on a 0-10 scale:
               news/announcements published more than 14 days ago.
 
 Buckets: the top 3 are "Read today", the next 4 "Read next", the rest "Later".
-Writes STATE_DIR/queue.json (the order and buckets read-later-deliver renders) and prints a short text view.
+Also lists what needs the reader's attention: items whose article could not be fetched
+(`status: failed`) and items whose analysis keeps failing (`analysisError`, no analysis yet).
+Writes STATE_DIR/queue.json (the order, buckets and attention list read-later-deliver renders) and prints a short text view.
 Exit codes: 0 ran, 2 bad arguments, 3 STATE_DIR not usable.
 """
 from __future__ import annotations
@@ -86,12 +88,26 @@ def score(item: dict, weights: dict[str, int], today: date) -> tuple[float, dict
     return priority, {"relevance": round(relevance, 1), "quality": round(quality, 1), "topTopic": top_topic, "notes": notes}
 
 
+def attention(folder: str, item: dict) -> dict | None:
+    """Why the reader should look at this item themselves, or None. Rendered at the top of the library page."""
+    if item.get("status") in ("archived", "done"):
+        return None
+    base = {"item": f"items/{folder}", "title": item.get("title") or item.get("url"), "url": item.get("url")}
+    if item.get("status") == "failed":
+        return {**base, "kind": "fetch", "reason": item.get("failure") or "could not extract the article", "attempts": item.get("attempts", 1), "at": item.get("failedAt") or item.get("extractedAt")}
+    if not item.get("analysis") and isinstance(item.get("analysisError"), dict):
+        return {**base, "kind": "analysis", "reason": item["analysisError"].get("message") or "analysis failed", "at": item["analysisError"].get("at")}
+    return None
+
+
 def minutes(item: dict) -> int:
     return max(1, round((item.get("words") or 0) / 230))
 
 
-def render_md(buckets: dict[str, list[dict]], today: date) -> str:
+def render_md(buckets: dict[str, list[dict]], today: date, needs: list[dict] | None = None) -> str:
     out = [f"# Read later · {today.isoformat()}", ""]
+    if needs:
+        out += ["## Needs attention", ""] + [f"- [{n['title']}]({n['url']}) · {n['kind']}: {n['reason']}" for n in needs] + [""]
     for name, title in (("read_today", "Read today"), ("read_next", "Read next"), ("later", "Later")):
         entries = buckets[name]
         out += [f"## {title}", ""]
@@ -125,9 +141,11 @@ def main(argv: list[str]) -> int:
 
     weights = load_weights(root / "topics.md")
     today = datetime.now(timezone.utc).date()
-    ranked, skipped = [], 0
+    ranked, skipped, needs = [], 0, []
     for p in sorted((root / "items").glob("*/item.json")):
         item = json.loads(p.read_text())
+        if att := attention(p.parent.name, item):
+            needs.append(att)
         s = score(item, weights, today)
         if s is None:
             skipped += 1
@@ -139,10 +157,11 @@ def main(argv: list[str]) -> int:
     buckets = {"read_today": ranked[: args.today], "read_next": ranked[args.today : args.today + args.next_], "later": ranked[args.today + args.next_ :]}
 
     queue = {"generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"), "weights": WEIGHTS,
-             "buckets": {k: [{kk: vv for kk, vv in e.items() if kk != "analysis"} | {"tldr": e["analysis"]["tldr"], "category": e["analysis"]["category"], "topics": e["analysis"]["topics"]} for e in v] for k, v in buckets.items()}}
+             "buckets": {k: [{kk: vv for kk, vv in e.items() if kk != "analysis"} | {"tldr": e["analysis"]["tldr"], "category": e["analysis"]["category"], "topics": e["analysis"]["topics"]} for e in v] for k, v in buckets.items()},
+             "attention": needs}
     (root / "queue.json").write_text(json.dumps(queue, indent=2, ensure_ascii=False) + "\n")
-    print(json.dumps(queue, indent=2, ensure_ascii=False) if args.json else render_md(buckets, today))
-    print(f"ranked {len(ranked)} item(s), skipped {skipped} (unanalyzed or outdated analysis, done, archived, not-an-article or stale news)", file=sys.stderr)
+    print(json.dumps(queue, indent=2, ensure_ascii=False) if args.json else render_md(buckets, today, needs))
+    print(f"ranked {len(ranked)} item(s), skipped {skipped} (unanalyzed or outdated analysis, done, archived, not-an-article or stale news), {len(needs)} need attention", file=sys.stderr)
     return 0
 
 
