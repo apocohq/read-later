@@ -333,6 +333,11 @@ def main(argv: list[str]) -> int:
             print(f"merged    {len(evs)} capture(s) into {'existing' if found else 'new'} item  {canonical}", file=sys.stderr)
         item["captures"] += [capture_record(e) for e in evs]
         item["mustRead"] = item["mustRead"] or any(e.get("mustRead") for e in evs)
+        if item["status"] == "done":  # a fresh capture of a finished item puts it back in the queue
+            item["status"] = "analyzed" if item.get("analysis") else "extracted"
+            item.pop("doneAt", None)
+            store.feedback({"item": found[0], "action": "reopen", "reason": f"captured again via {evs[-1].get('source', '?')}", "at": now()})
+            print(f"reopened  items/{found[0]}", file=sys.stderr)
         markdown = None
         if not found or not (store.items / found[0] / "content.md").exists():
             if content := acquire(canonical, evs):

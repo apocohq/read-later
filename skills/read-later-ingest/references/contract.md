@@ -62,6 +62,7 @@ The folder is `<first capture time>-<title slug>`, e.g. `2026-09-07T13-00-00Z-ru
 | `url` | canonical URL, the item's identity |
 | `title` | from extraction, else from the capture |
 | `status` | `captured` → `extracted` \| `failed` (adds `failure`) → `analyzed` → `done` (adds `doneAt`) \| `archived` |
+| | A new `capture` of a `done` item reopens it: status back to `analyzed` (or `extracted` if never analyzed), `doneAt` removed, a `reopen` line in `feedback.jsonl` |
 | `mustRead` | true once any capture said so; never reset |
 | `captures[]` | one per capture: `at`, `source`, and only the user's signals if present: `note`, `selectedText`, `recommendedBy`, `sourceRef` |
 | `author`, `published` | when found. `published` is heuristic; treat as approximate |

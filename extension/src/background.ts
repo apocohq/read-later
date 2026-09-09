@@ -5,7 +5,7 @@
  */
 import { inboxPath, loadSettings, type BrowserCapture } from "./contract.js";
 import { fromSettings } from "./dam-client.js";
-import { forget, lookup, remember } from "./saved.js";
+import { forget, lookup, markDone, remember, type SavedEntry } from "./saved.js";
 
 interface PageSnapshot {
   url: string;
@@ -30,7 +30,7 @@ const inFlight = new Set<string>();
 const newId = () =>
   `${new Date().toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID().slice(0, 6)}`;
 
-type IconState = "default" | "busy1" | "busy2" | "busy3" | "saved" | "must" | "error";
+type IconState = "default" | "busy1" | "busy2" | "busy3" | "saved" | "must" | "done" | "error";
 /** Mid-grey outline: the usual compromise that reads on both light and dark toolbars. */
 const iconPaths = (state: IconState) =>
   Object.fromEntries([16, 32, 48, 128].map((s) => [String(s), `icons/${state}-${s}.png`]));
@@ -57,11 +57,14 @@ function startBusy(tabId: number, minMs = 900): () => Promise<void> {
   };
 }
 
-/** Restore the saved/must icon for pages this browser already captured. */
+/** Colour means "in your queue"; done stays grey like idle, the check tells it apart. */
+const iconFor = (entry?: SavedEntry): IconState =>
+  !entry ? "default" : entry.status === "done" ? "done" : entry.mustRead ? "must" : "saved";
+
+/** Restore the saved/must/done icon for pages this browser already captured. */
 async function reflectSaved(tabId: number, url?: string): Promise<void> {
   if (!url || !/^https?:/.test(url)) return;
-  const entry = await lookup(url);
-  await showState(entry ? (entry.mustRead ? "must" : "saved") : "default", tabId);
+  await showState(iconFor(await lookup(url)), tabId);
 }
 
 async function capture(opts: { mustRead: boolean; note?: string }): Promise<void> {
@@ -112,8 +115,10 @@ async function capture(opts: { mustRead: boolean; note?: string }): Promise<void
   }
 }
 
-/** Retract: tell the agent to drop or archive the item, and forget it locally. */
-/** Send a `remove` or `done` event for the current tab. Both take the page out of the local saved list. */
+/**
+ * Send a `remove` or `done` event for the current tab. Remove forgets the page locally;
+ * done keeps it with a `done` flag so the icon can say "you read this" on a revisit.
+ */
 async function sendAction(action: "remove" | "done"): Promise<void> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id || !tab.url) return;
@@ -134,9 +139,10 @@ async function sendAction(action: "remove" | "done"): Promise<void> {
       content: JSON.stringify(event),
       contentType: "application/json",
     });
-    await forget(tab.url);
+    if (action === "done") await markDone(tab.url, event.capturedAt);
+    else await forget(tab.url);
     await stopBusy();
-    await showState("default", tab.id);
+    await showState(action === "done" ? "done" : "default", tab.id);
   } catch (err) {
     await stopBusy();
     console.error(`[read-later] ${action} failed`, err);
@@ -149,10 +155,12 @@ async function sendAction(action: "remove" | "done"): Promise<void> {
 
 const remove = () => sendAction("remove");
 
+/** Toolbar click: queued page → remove; done page → back into the queue; anything else → capture. */
 async function toggle(): Promise<void> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.url) return;
-  await ((await lookup(tab.url)) ? remove() : capture({ mustRead: false }));
+  const entry = await lookup(tab.url);
+  await (entry && entry.status !== "done" ? remove() : capture({ mustRead: false }));
 }
 
 /** Chrome groups several items under a "DAM Read Later" submenu; rebuild them on install, update, and reload. */

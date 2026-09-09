@@ -6,6 +6,8 @@
 export interface SavedEntry {
   at: string;
   mustRead: boolean;
+  /** Absent means in the queue; `done` means the reader finished it and the agent was told. */
+  status?: "done";
 }
 
 const KEY = "saved";
@@ -38,6 +40,13 @@ export async function lookup(url: string): Promise<SavedEntry | undefined> {
 export async function remember(url: string, entry: SavedEntry): Promise<void> {
   const map = await all();
   map[canonicalize(url)] = entry;
+  await chrome.storage.local.set({ [KEY]: map });
+}
+
+/** Keep the entry but flag it read, so a revisit shows the done icon and a click re-captures instead of removing. */
+export async function markDone(url: string, at: string): Promise<void> {
+  const map = await all();
+  map[canonicalize(url)] = { ...(map[canonicalize(url)] ?? { mustRead: false }), at, status: "done" };
   await chrome.storage.local.set({ [KEY]: map });
 }
 

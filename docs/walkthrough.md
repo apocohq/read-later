@@ -38,7 +38,7 @@ Authorization: Bearer pk_…          # scope agents:operate, bound to the one a
 }
 ```
 
-Nothing flows back to the browser. The extension keeps its own local list of saved URLs for the icon state.
+Nothing flows back to the browser. The extension keeps its own local list of saved URLs (with a `done` flag for finished ones) for the icon state.
 
 **Tested:** a bookmark in Chrome lands as a file in `~/work/read-later/inbox/` on the agent.
 
