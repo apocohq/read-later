@@ -143,7 +143,7 @@ Two flat lists, seeded by `read-later-analyze` from its `references/topics.md`. 
 
 ## Queue — `queue.json`
 
-Written by `read-later-rank`; the only input `read-later-deliver` needs besides the items. Buckets `read_today`, `read_next`, `later`; each entry carries `item`, `title`, `url`, `priority`, `relevance`, `quality`, `minutes`, `tldr`, `category`, `topics`, `topTopic` (the heaviest-weighted topic, shown on the cover), `notes`. Generated files: change the weights or the script, not these. `attention` lists items the reader has to look at themselves, shown at the top of the library page: `{item, title, url, kind: "fetch" | "analysis", reason, attempts?, at}` for `failed` items and for items whose analysis keeps failing.
+Written by `read-later-rank`; the only input `read-later-deliver` needs besides the items. Buckets `read_today`, `read_next`, `later`; each entry carries `item`, `title`, `url`, `priority`, `relevance`, `quality`, `minutes`, `tldr`, `category`, `topics`, `topTopic` (the heaviest-weighted topic, shown on the cover), `notes`. Generated files: change the weights or the script, not these. `attention` lists items the reader has to look at themselves, shown at the top of the library page: `{item, title, url, kind: "fetch" | "analysis", reason, attempts?, at}` for `failed` items and for items whose analysis keeps failing. `topics` lists the topics present in the queue as `{label, weight, count}`, ordered by the reader's weight (the page's filter chips).
 
 ## Delivery — `queue.html`, `deliver.json`
 

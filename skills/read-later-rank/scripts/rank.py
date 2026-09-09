@@ -156,7 +156,14 @@ def main(argv: list[str]) -> int:
     ranked.sort(key=lambda e: (-e["priority"], e["item"]))
     buckets = {"read_today": ranked[: args.today], "read_next": ranked[args.today : args.today + args.next_], "later": ranked[args.today + args.next_ :]}
 
-    queue = {"generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"), "weights": WEIGHTS,
+    # topics present in the queue, most relevant to the reader first: the page's filter chips
+    counts: dict[str, int] = {}
+    for e in ranked:
+        for t in e["analysis"].get("topics", []):
+            counts[t] = counts.get(t, 0) + 1
+    topic_index = sorted(({"label": t, "weight": weights.get(t, DEFAULT_WEIGHT), "count": n} for t, n in counts.items()),
+                         key=lambda x: (-x["weight"], -x["count"], x["label"]))
+    queue = {"generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"), "weights": WEIGHTS, "topics": topic_index,
              "buckets": {k: [{kk: vv for kk, vv in e.items() if kk != "analysis"} | {"tldr": e["analysis"]["tldr"], "category": e["analysis"]["category"], "topics": e["analysis"]["topics"]} for e in v] for k, v in buckets.items()},
              "attention": needs}
     (root / "queue.json").write_text(json.dumps(queue, indent=2, ensure_ascii=False) + "\n")

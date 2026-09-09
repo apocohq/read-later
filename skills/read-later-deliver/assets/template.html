@@ -27,10 +27,14 @@ header .sub{color:var(--ink2);font-size:13px;margin-top:4px}
 .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .chip{border:1px solid var(--line);background:transparent;color:var(--ink2);border-radius:999px;padding:5px 12px;font-size:13px;cursor:pointer;font-family:inherit}
 .chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip .n{opacity:.6;margin-left:4px;font-size:11px}
+.chip.more{border-style:dashed}
+.controls .topics{display:contents}
 .chip:focus-visible,.tile:focus-visible,.close:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 input[type=search]{border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;min-width:180px}
 
 /* needs attention */
+.attention[hidden]{display:none}
 .attention{border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line));border-left:4px solid var(--accent);border-radius:8px;padding:12px 16px;margin:0 0 8px;display:grid;gap:8px;background:color-mix(in srgb,var(--accent) 6%,var(--paper))}
 .attention h2{margin:0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);display:flex;gap:10px;align-items:baseline}
 .attention h2 small{letter-spacing:0;text-transform:none;color:var(--ink3);font-weight:400}
@@ -59,14 +63,16 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 .cover::after{content:"";position:absolute;right:0;top:0;bottom:0;width:3px;background:repeating-linear-gradient(180deg,rgba(255,255,255,.5) 0 1px,rgba(0,0,0,.15) 1px 2px);opacity:.7}
 .tile:hover .cover{transform:translateY(-3px) rotate(-.4deg);box-shadow:0 2px 3px rgba(40,30,20,.14),0 18px 30px -14px rgba(40,30,20,.5)}
 .cover .head{display:grid;gap:5px;min-width:0}
-.cover .kicker{font-size:10px;letter-spacing:.14em;text-transform:uppercase;opacity:.9;display:flex;justify-content:space-between;align-items:center;gap:6px;min-width:0}
-.cover .topic{font-size:11.5px;letter-spacing:.02em;opacity:.72;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:9px;position:relative}
-.cover .topic::before{content:"";position:absolute;left:0;top:50%;width:4px;height:1px;background:currentColor;opacity:.8}
+.cover .kicker{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;opacity:.92;display:flex;justify-content:space-between;align-items:center;gap:6px;min-width:0}
+.cover .topic{font-size:13px;letter-spacing:.01em;opacity:.78;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
 .cover .kicker .cat{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cover .kicker .pill{flex:none;background:#f2c14e;color:#222;border-radius:3px;padding:1px 6px;letter-spacing:.08em;font-weight:700}
-.cover .title{font-size:16.5px;line-height:1.25;font-weight:600;text-wrap:balance;text-shadow:0 1px 2px rgba(0,0,0,.25);display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
+.cover .title{font-size:19px;line-height:1.22;font-weight:600;text-wrap:balance;text-shadow:0 1px 2px rgba(0,0,0,.25);display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
 .cover .foot{font-size:11px;opacity:.9;display:flex;justify-content:space-between;gap:6px}
 .under{display:flex;flex-direction:column;gap:6px;padding:0 2px}
+.total{display:flex;align-items:baseline;gap:6px;font-size:10.5px;color:var(--ink3);letter-spacing:.08em;text-transform:uppercase}
+.total b{font-size:17px;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:0;margin-left:auto}
+.total .of{color:var(--ink3);letter-spacing:0;font-size:11px}
 .bars{display:grid;grid-template-columns:auto 1fr auto;gap:4px 8px;align-items:center;font-size:10.5px;color:var(--ink3)}
 .bars .v{font-variant-numeric:tabular-nums;color:var(--ink2);min-width:1.6em;text-align:right}
 .bar{display:grid;grid-template-columns:repeat(10,1fr);gap:2px;height:5px}
@@ -145,7 +151,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
 .toast.show{opacity:1}
 .copybox{display:grid;gap:6px}
 .copybox textarea{width:100%;height:120px;font:12px ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);padding:8px}
-@media (max-width:640px){main{padding:24px 16px 70px}.grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px 12px}.cover .title{font-size:15px}.pane .head,.pane .body{padding-left:20px;padding-right:20px}}
+@media (max-width:640px){main{padding:24px 16px 70px}.grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px 12px}.cover .title{font-size:16.5px}.pane .head,.pane .body{padding-left:20px;padding-right:20px}}
 @media (prefers-reduced-motion:reduce){.pane{animation:none}.tile:hover .cover{transform:none}}
 </style>
 </head>
@@ -157,10 +163,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       <div class="sub" id="sub"></div>
     </div>
     <div class="controls" id="controls">
-      <button class="chip" data-f="all" aria-pressed="true">All</button>
-      <button class="chip" data-f="read_today">Tonight</button>
-      <button class="chip" data-f="read_next">Next</button>
-      <button class="chip" data-f="later">Later</button>
+      <span class="topics" id="topics"></span>
       <input type="search" id="q" placeholder="Search title, topic, text" aria-label="Search">
     </div>
   </header>
@@ -187,6 +190,8 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
   const colors = cat => { const [h,s] = HUES[cat] || HUES.other; return `--c1:hsl(${h} ${s}% 34%);--c2:hsl(${(h+18)%360} ${Math.max(20,s-10)}% 22%)`; };
   const slots = v => { const n = Math.round(Math.max(0, Math.min(10, Number(v)||0))); return Array.from({length:10}, (_,i) => `<i class="${i < n ? 'on' : ''}"></i>`).join(''); };
   const num = v => v == null ? '–' : (Number.isInteger(Number(v)) ? String(v) : Number(v).toFixed(1));
+  // overall score: rank's priority (0-10, must-read can push it over) shown as 0-5 with two decimals
+  const score5 = v => v == null ? '–' : (Math.max(0, Math.min(10, Number(v))) / 2).toFixed(2);
 
   document.getElementById('sub').textContent = `${items.length} saved · generated ${(DATA.generatedAt||'').replace('T',' ').replace(/:\d\d(\.\d+)?Z$/,' UTC')}`;
 
@@ -212,6 +217,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
         <div class="foot"><span>${esc(domain(it.url))}</span><span>${esc(it.minutes)} min${HL.current(it).length ? ' · '+HL.current(it).length+' ✎' : ''}</span></div>
       </div>
       <div class="under">
+        <div class="total" title="Overall score: half relevance, half quality; long reads lose a point, must-read gains three"><span>score</span><b>${score5(it.priority)}</b><span class="of">/ 5</span></div>
         <div class="bars">
           <span>relevance</span><div class="bar rl">${slots(it.relevance)}</div><span class="v">${num(it.relevance)}</span>
           <span>hard-won</span><div class="bar hw">${slots(it.hardWon&&it.hardWon.score)}</div><span class="v">${num(it.hardWon&&it.hardWon.score)}</span>
@@ -227,9 +233,9 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
     for (const key of ['read_today','read_next','later']){
       const sec = document.getElementById('s-'+key), grid = sec.querySelector('.grid');
       grid.innerHTML = '';
-      const rows = items.filter(it => it.bucket===key && (filter==='all' || filter===key) && (!q || [it.title, it.tldr, (it.topics||[]).join(' '), it.category, it.markdown, HL.current(it).map(h => h.exact+' '+(h.note||'')).join(' ')].join(' ').toLowerCase().includes(q)));
+      const rows = items.filter(it => it.bucket===key && (filter==='all' || (it.topics||[]).includes(filter)) && (!q || [it.title, it.tldr, (it.topics||[]).join(' '), it.category, it.markdown, HL.current(it).map(h => h.exact+' '+(h.note||'')).join(' ')].join(' ').toLowerCase().includes(q)));
       document.getElementById('n-'+key).textContent = rows.length ? `${rows.length}` : '';
-      sec.style.display = (filter==='all' || filter===key) ? '' : 'none';
+      sec.style.display = (filter==='all' || rows.length) ? '' : 'none';
       if (!rows.length){ grid.insertAdjacentHTML('beforeend', `<div class="empty">${q ? 'No match.' : 'Nothing here.'}</div>`); continue; }
       rows.forEach(it => grid.appendChild(tile(it)));
     }
@@ -379,7 +385,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
         <div style="min-width:0;flex:1">
           <h2 id="r-title" class="serif">${esc(it.title||it.url)}</h2>
           <div class="meta">
-            <span>${esc(domain(it.url))}</span>${it.author ? `<span>${esc(it.author)}</span>` : ''}${it.published ? `<span>${esc(it.published)}</span>` : ''}
+            <span title="Overall score, 0-5"><b>${score5(it.priority)}</b> / 5</span><span>${esc(domain(it.url))}</span>${it.author ? `<span>${esc(it.author)}</span>` : ''}${it.published ? `<span>${esc(it.published)}</span>` : ''}
             <span>${esc(it.minutes)} min</span><span>${esc(it.category)}${it.contentType ? ' · '+esc(it.contentType) : ''}</span>
             <a href="${esc(it.url)}" target="_blank" rel="noopener">Open original ↗</a>
           </div>
@@ -480,12 +486,22 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
   reader.addEventListener('click', e => { if (e.target === reader) close(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && reader.classList.contains('open')) close(); });
 
-  let filter = 'all';
+  // topic chips, most relevant to the reader first (rank orders them by topic weight); the rest behind "More"
+  let filter = 'all', moreTopics = false;
+  const TOPICS_SHOWN = 6;
+  function renderTopics(){
+    const all = DATA.topics || [], shown = moreTopics ? all : all.slice(0, TOPICS_SHOWN), rest = all.length - TOPICS_SHOWN;
+    document.getElementById('topics').innerHTML = `<button class="chip" data-f="all" aria-pressed="${filter==='all'}">All</button>` +
+      shown.map(t => `<button class="chip" data-f="${esc(t.label)}" aria-pressed="${filter===t.label}" title="relevance ${esc(t.weight)}/10 · ${t.count} article${t.count===1?'':'s'}">${esc(t.label)}<span class="n">${t.count}</span></button>`).join('') +
+      (rest > 0 ? `<button class="chip more" data-more="1" aria-expanded="${moreTopics}">${moreTopics ? 'Fewer' : `${rest} more`}</button>` : '');
+  }
   document.getElementById('controls').addEventListener('click', e => {
     const b = e.target.closest('.chip'); if (!b) return;
-    filter = b.dataset.f; document.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', c === b ? 'true' : 'false'));
+    if (b.dataset.more){ moreTopics = !moreTopics; renderTopics(); return; }
+    filter = b.dataset.f; renderTopics();
     render(filter, document.getElementById('q').value);
   });
+  renderTopics();
   document.getElementById('q').addEventListener('input', e => render(filter, e.target.value));
   render(filter, '');
   const want = decodeURIComponent(location.hash.slice(1)); const hit = want && items.find(i => i.id === want); if (hit) open(hit);
