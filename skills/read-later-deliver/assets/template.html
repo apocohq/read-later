@@ -98,6 +98,8 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 .sw[aria-pressed="true"]{border-color:var(--ink)}
 .tools .sep{width:1px;height:18px;background:var(--line);margin:0 4px}
 .tools .chip{padding:4px 10px;font-size:12.5px}
+.chip.danger{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,var(--line));margin-left:auto}
+.chip.danger:hover{background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .pane .meta a{color:var(--accent);text-decoration:none}.pane .meta a:hover{text-decoration:underline}
 .close{margin-left:auto;flex:none;border:1px solid var(--line);background:transparent;color:var(--ink2);border-radius:999px;width:34px;height:34px;cursor:pointer;font-size:18px;line-height:1}
 .pane .body{padding:22px 36px 60px;display:grid;gap:22px}
@@ -362,10 +364,11 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       const json = hasFile ? JSON.stringify(file(it), null, 2) : '';
       const fileLine = `Read later highlights, replace items/${it.id}/highlights.json with this file:\n\n${json}`;
       if (action === 'done') return `Read later, done reading, mark it as read: ${it.url}` + (json ? `\n\n${fileLine}` : '');
+      if (action === 'remove') return `Read later, remove this article from my list: ${it.url}`;
       return fileLine;
     };
     const transports = [
-      async (text, action, ui) => { try { await navigator.clipboard.writeText(text); ui.toast(action === 'done' ? 'Copied. Paste it to your agent to finish this article.' : 'Copied. Paste it to your agent.'); } catch { ui.fallback(text); } return true; },
+      async (text, action, ui) => { try { await navigator.clipboard.writeText(text); ui.toast(action === 'done' ? 'Copied. Paste it to your agent to finish this article.' : action === 'remove' ? 'Copied. Paste it to your agent to remove this article.' : 'Copied. Paste it to your agent.'); } catch { ui.fallback(text); } return true; },
     ];
     async function emit(it, action, ui){ const text = payload(it, action); for (const t of transports) if (await t(text, action, ui)) return text; return null; }
     function setColorOf(it, id, color){ const st = state(it); const mine = st.added.find(h => h.id === id); if (mine){ mine.color = color; save(it, st); return; } const src = synced(it).find(h => h.id === id); if (!src) return; st.added.push({...src, id: newId('h'), color}); if (!st.deleted.some(d => d.id === id)) st.deleted.push({id, at: Date.now()}); save(it, st); }
@@ -435,11 +438,13 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
         ${hlOn ? `<span class="swatches" role="radiogroup" aria-label="Highlight color">${HL.COLORS.map(c => `<button class="sw" data-c="${c}" aria-pressed="${c === color}" title="${c}" aria-label="${c}"></button>`).join('')}</span>` : ''}
         <span class="sep"></span>
         <button class="chip" id="hl-copy" ${list.length ? '' : 'disabled'} title="Copy highlights.json for your agent">Copy for chat</button>
-        <button class="chip" id="hl-done" title="Copy a done message, with the highlights, for your agent">Done reading</button>`;
+        <button class="chip" id="hl-done" title="Copy a done message, with the highlights, for your agent">Done reading</button>
+        <button class="chip danger" id="hl-remove" title="Copy a message asking your agent to remove this article">Remove</button>`;
       tools.querySelector('#hl-toggle').addEventListener('click', () => { hlOn = !hlOn; closePop(); article.classList.toggle('hl-on', hlOn); renderTools(); renderPanel(); });
       tools.querySelectorAll('.sw').forEach(b => b.addEventListener('click', () => { HL.setColor(b.dataset.c); renderTools(); }));
       tools.querySelector('#hl-copy').addEventListener('click', () => HL.emit(it, 'highlight', ui));
       tools.querySelector('#hl-done').addEventListener('click', () => HL.emit(it, 'done', ui));
+      tools.querySelector('#hl-remove').addEventListener('click', () => HL.emit(it, 'remove', ui));
     }
     function renderPanel(){
       const list = HL.current(it), unsent = list.filter(h => HL.isLocal(it, h.id)).length;
