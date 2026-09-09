@@ -1,6 +1,6 @@
 # Installing read-later on a DAM agent
 
-One agent, five skills, one Chrome extension, two schedules. Two ways to get there: tell the agent to install itself (section A), or run the CLI yourself (section B). Both end with the extension (section C).
+One agent, six skills, one Chrome extension, two schedules. Two ways to get there: tell the agent to install itself (section A), or run the CLI yourself (section B). Both end with the extension (section C).
 
 ## 0. Before either way (owner, once)
 
@@ -8,6 +8,7 @@ The agent must exist on the **Claude Code** template and have two things only an
 
 - **A model connection.** Analysis runs in ephemeral Invocations that need exactly one model connection. Find its id with `dam connection list`, then `dam connection grant <agent> --connection <model-connection>`.
 - **Network access** for the first-run package downloads (PyPI) and the article-fetch fallback: `dam network apply-preset <agent> --preset all --yes`. The `trusted` preset also works; then only bookmarks that arrive without HTML cannot be fetched.
+- **The Slack connection**, if links shared in Slack should be swept: `dam connection grant <agent> --connection slack`. The sweep only reads (two search tools, allowlisted in the script); without the grant the refresh skips it.
 - A fresh agent, if you need one: `dam agent create <agent> --template claude-code`.
 
 The skill source must be registered once per DAM account: `dam skill source add https://github.com/apocohq/read-later` ("already registered" means it is done).
@@ -24,7 +25,7 @@ The agent reads this file and does the steps below with its platform tools (`ins
 
 If you are the agent reading this, do these in order and report at the end. Do not skip to running the pipeline.
 
-1. **Skills.** Call `list_skill_sources` and find the source whose git URL is `https://github.com/apocohq/read-later`. If it is missing, stop and tell the owner to run `dam skill source add https://github.com/apocohq/read-later`. Otherwise call `install_skill` for each of `read-later-ingest`, `read-later-analyze`, `read-later-rank`, `read-later-deliver`, `read-later-prune`. Installing an already installed skill updates it to the source's HEAD; that is fine.
+1. **Skills.** Call `list_skill_sources` and find the source whose git URL is `https://github.com/apocohq/read-later`. If it is missing, stop and tell the owner to run `dam skill source add https://github.com/apocohq/read-later`. Otherwise call `install_skill` for each of `read-later-slack`, `read-later-ingest`, `read-later-analyze`, `read-later-rank`, `read-later-deliver`, `read-later-prune`. Installing an already installed skill updates it to the source's HEAD; that is fine.
 2. **State dir.** `mkdir -p ~/work/read-later/inbox`. Everything read-later writes lives under `~/work/read-later/`.
 3. **Reader context.** Write `~/work/read-later/context.md`. If you keep files about the person you work for (a USER.md, memory notes, current projects), list them, one path per line with a few words on what each holds, under the heading `# Reader context` and the line `Read these before reweighing topics:`. If you know nothing about the reader, write the single line `NO CONTEXT AVAILABLE`. See [Reader context](#reader-context) for both shapes.
 4. **Dependencies.** From the ingest skill's directory run `uv run scripts/ingest.py ~/work/read-later` once. The inbox is empty, so it only downloads the Python packages and prints `done: 0 extracted, 0 failed`.
@@ -37,10 +38,10 @@ If you are the agent reading this, do these in order and report at the end. Do n
 The same steps, run from a machine where the DAM CLI is logged in.
 
 ```sh
-for s in ingest analyze rank deliver prune; do
+for s in slack ingest analyze rank deliver prune; do
   dam skill install <agent> --source https://github.com/apocohq/read-later --name read-later-$s
 done
-dam skill list <agent>                                              # five skills, same commit
+dam skill list <agent>                                              # six skills, same commit
 ```
 
 Re-run the install loop to update. Skills are installed at the source's current HEAD.
@@ -93,16 +94,16 @@ Two schedules, fresh session each tick. The refresh at 18:00 means everything sa
 
 | name | when | task |
 |---|---|---|
-| `read-later-refresh` | daily 18:00 | `Read-later refresh. State dir ~/work/read-later. Use the installed skills in this order, and only these: read-later-ingest, read-later-analyze (pass only the model connection), read-later-rank (reweigh from context.md first), read-later-deliver. Report each script output briefly and the artifact link. Do not open articles.` |
+| `read-later-refresh` | daily 18:00 | `Read-later refresh. State dir ~/work/read-later. Use the installed skills in this order, and only these: read-later-slack (sweep, judge the shortlist, capture; skip the skill if the script reports no Slack connection), read-later-ingest, read-later-analyze (pass only the model connection), read-later-rank (reweigh from context.md first), read-later-deliver. Report each script output briefly and the artifact link. Do not open articles.` |
 | `read-later-prune` | Sundays 09:00 | `Read-later weekly prune. State dir ~/work/read-later. Use skill read-later-prune: run its script, then tidy topics.md as the skill describes. Report what moved and what changed in the vocabulary.` |
 
 ## First run by hand
 
 Once a few pages are saved, in the agent's chat:
 
-> ingest, analyze, rank and deliver read later
+> sweep slack, ingest, analyze, rank and deliver read later
 
-Expected: ingest reports what it extracted; analyze spawns one Invocation per item and prints category and scores; rank reweighs (or says no context) and prints the queue; deliver publishes the `Read later` artifact and replies with its link. Each Invocation takes one to three minutes and they run three at a time.
+Expected: the sweep captures your saved Slack messages and self-DM links, then asks itself about the rest and reports its picks; ingest reports what it extracted; analyze spawns one Invocation per item and prints category and scores; rank reweighs (or says no context) and prints the queue; deliver publishes the `Read later` artifact and replies with its link. Each Invocation takes one to three minutes and they run three at a time.
 
 Then open `~/work/read-later/topics.md`, set a first pass of weights (0-10) for the topics you care about, and ask the agent to rank and deliver again.
 
@@ -111,6 +112,7 @@ Then open `~/work/read-later/topics.md`, set a first pass of weights (0-10) for 
 ```
 ~/work/read-later/
   inbox/            empty after each run
+  slack/            state.json (last sweep, decisions), skipped.json (links behind logins, listed on the page)
   items/            one folder per live article: item.json (with analysis), content.md, highlights.json when you highlighted
   done/  archive/   moved there by prune
   topics.md         categories + weighted topics

@@ -105,6 +105,10 @@ Known gaps from that run: the analyzer put KubeStellar under `ai-and-agents` whe
 
 **Both install paths rehearsed on fresh agents (2026-09-09):** `rl-cli-test` was set up from the CLI by following INSTALL.md section B literally (five skills, `context.md` with the marker, two schedules). `rl-self-test` got the single chat line from section A pointing at the branch's INSTALL.md; with only its platform tools it installed the five skills onto itself at the same commit, created `inbox/`, wrote the marker `context.md` after finding no reader files, ran ingest once for the dependencies, created both schedules with the task texts verbatim (checked with `dam schedule get`), skipped the git step because `~/work` is not a repo, and reported what remained for the owner. One seeded bookmark and the "ingest, analyze, rank and deliver read later" phrase then produced a `Read later` artifact on each agent.
 
+## Step 6 · Slack as a second producer  ✅ built, tested on a temporary agent
+
+`read-later-slack`: `scripts/slack.py sweep` searches Slack through the MCP server at `mcp.slack.com` (a script on the agent can call it directly; the gateway adds the token, verified 2026-09-09). Two searches, `is:saved has:link` and `has:link after:<last sweep>`, over every channel and DM. Saved messages and self-DM links are captured at once (Slack's **Save for later** is the capture button); the other links come back as a numbered shortlist with the poster's words and replies, the agent picks, `scripts/slack.py capture --picks …` writes the events. Unreachable links (logins, social) land in `slack/skipped.json` and rank lists them under *Needs attention*; deliver shows "shared by X in #channel" and the poster's words in the reader pane. The first dry run on the real workspace: 4 saved, 70 recent messages with links over 7 days, 43 candidates, 16 skipped.
+
 ## Where things stand
 
 - Steps 1-5 work end to end on two agents: `first-reader` (your bookmarks) and `read-later-test` (the INSTALL.md rehearsal). Both run `read-later-refresh` at 18:00 Prague and `read-later-prune` on Sundays.
@@ -118,5 +122,5 @@ Known gaps from that run: the analyzer put KubeStellar under `ai-and-agents` whe
 2. Point the extension at that agent (new key bound to it) and use *Mark as read* for a week; check that `done/` fills and Tonight changes.
 3. Feed what you finish reading back into the weights (topics of `done/` items drift up).
 4. When DAM's artifact bridge ships: the page sends the highlight event itself, on every change. One transport function in the template, nothing on the agent.
-5. Slack as a second producer; the multi-user template; a name.
+5. Slack sweep on guido: grant the connection, install the skill, add it to the refresh task; watch a week of picks and tune the drop lists. Then the multi-user template; a name.
 
