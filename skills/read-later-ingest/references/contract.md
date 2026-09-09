@@ -27,7 +27,7 @@ Written by producers (today: the Chrome extension), read only by `scripts/ingest
 | `url` | yes | as seen; canonicalization happens here, not in the producer |
 | `title` | no | page title |
 | `selectedText`, `note` | no | the user's own signal why it matters |
-| `html` | no | full rendered DOM; makes paywalled and JS-rendered pages work |
+| `html` | no | full rendered DOM; makes paywalled and JS-rendered pages work. Omitted when the tab is not an HTML document (a PDF in the browser's viewer); ingest fetches the URL instead |
 | `text` | no | readable text supplied by a producer that has no HTML |
 | `mustRead` | no | hard override for later ranking; never filtered out |
 | `capturedAt` | yes | ISO timestamp; orders capture vs remove |
@@ -66,8 +66,9 @@ The folder is `<first capture time>-<title slug>`, e.g. `2026-09-07T13-00-00Z-ru
 | `mustRead` | true once any capture said so; never reset |
 | `captures[]` | one per capture: `at`, `source`, and only the user's signals if present: `note`, `selectedText`, `recommendedBy`, `sourceRef` |
 | `author`, `published` | when found. `published` is heuristic; treat as approximate |
-| `words`, `images` | size of the extracted article |
-| `extractedBy` | `capture` (browser HTML), `fetch` (agent fetched the URL), `capture-text` (producer's text) |
+| `words`, `images` | size of the extracted article. `images` is 0 for PDFs, whose figures are not extracted |
+| `pages` | PDFs only: page count |
+| `extractedBy` | `capture` (browser HTML), `fetch` (agent fetched the URL), `fetch-pdf` (agent fetched a PDF), `capture-text` (producer's text) |
 | `extractedAt` | when |
 
 `read-later-analyze` adds `analysis` and sets `status: "analyzed"`:
@@ -128,6 +129,8 @@ Produced by the library page (`read-later-deliver`), not by ingest. The page kee
 ## Article — `items/<folder>/content.md`
 
 Short frontmatter (`title`, `url`, `author`, `published`, when known), a blank line, then Markdown with headings, links, tables and images (absolute URLs). The full metadata lives in `item.json`.
+
+For a PDF the Markdown comes from PyMuPDF's layout analysis: headings by level, paragraphs joined across lines and pages, tables as pipe tables, running heads and page numbers dropped, no images, no OCR (a scanned PDF fails with too few words). Title, author and date come from the PDF's landing page when the host has one (arXiv's abstract page, via `citation_*` meta tags), else from the first heading and the PDF's own metadata.
 
 ## Folders
 
