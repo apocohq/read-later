@@ -2,7 +2,7 @@
 
 ## Inbox event — `inbox/<id>.json`
 
-Written by producers (today: the Chrome extension), read only by `scripts/ingest.py`.
+Written by producers (the Chrome extension, `read-later-slack`, the agent from chat), read only by `scripts/ingest.py`.
 
 ```json
 {
@@ -23,13 +23,15 @@ Written by producers (today: the Chrome extension), read only by `scripts/ingest
 |---|---|---|
 | `id` | yes | unique, time-sortable, also the filename |
 | `action` | no | `capture` (default); `remove` = retract earlier captures of this URL (drop if unprocessed, archive if processed); `done` = the reader finished it |
-| `source` | yes | `browser`; other producers may add their own value |
+| `source` | yes | `browser`; `chat` (the agent, on the reader's word); `slack` (the agent's pick from the sweep's shortlist); other producers add their own value |
 | `url` | yes | as seen; canonicalization happens here, not in the producer |
 | `title` | no | page title |
 | `selectedText`, `note` | no | the user's own signal why it matters |
 | `html` | no | full rendered DOM; makes paywalled and JS-rendered pages work. Omitted when the tab is not an HTML document (a PDF in the browser's viewer); ingest fetches the URL instead |
 | `text` | no | readable text supplied by a producer that has no HTML |
 | `mustRead` | no | hard override for later ranking; never filtered out |
+| `recommendedBy` | no | who shared it and where, e.g. `Radek Ježek in #podcast-club`; shown on the library page |
+| `sourceRef` | no | link back to where it was shared (a Slack permalink) |
 | `capturedAt` | yes | ISO timestamp; orders capture vs remove |
 
 Files that are not valid JSON or lack `url`/`capturedAt` are skipped with a message and left in place.
@@ -136,6 +138,14 @@ For a PDF the Markdown comes from PyMuPDF's layout analysis: headings by level, 
 
 `items/` is the live pool and the only folder `rank` reads. `read-later-prune` moves whole item folders to `done/` (status `done`) or `archive/` (status `archived`, `not-an-article`, or unread for 30 days and not must-read). Nothing is deleted.
 
+## Slack sweep state — `slack/`
+
+Written only by `read-later-slack/scripts/slack.py`.
+
+- `state.json`: `{"me": {id, name}, "lastSweepAt": "…", "seen": {"<canonical url>": {"decision": "captured|rejected|skipped", "at": "…", "sharers": ["U…"]}}}`. `seen` keeps the sweep from asking twice; a rejected link comes back only when a new sharer appears. Entries expire after 60 days.
+- `shortlist.json`: `{"sweepAt": "…", "candidates": [{n, url, title, recommendedBy, at, text, context[], replies, permalink, sharerIds}]}`; the agent's decision input, deleted by `capture`.
+- `skipped.json`: `[{url, title, reason, by, permalink, at}]`, links the fetch fallback cannot reach (login walls, social posts). `read-later-rank` lists them under `attention` with `kind: "slack"`.
+
 ## Reader context — `context.md`
 
 Written at setup. Either names where the reader's context lives (files or notes the agent should read before reweighing topics), or contains the line `NO CONTEXT AVAILABLE`. When missing or marked, `rank` skips reweighing and `prune` leaves new labels unweighted.
@@ -146,7 +156,7 @@ Two flat lists, seeded by `read-later-analyze` from its `references/topics.md`. 
 
 ## Queue — `queue.json`
 
-Written by `read-later-rank`; the only input `read-later-deliver` needs besides the items. Buckets `read_today`, `read_next`, `later`; each entry carries `item`, `title`, `url`, `priority`, `relevance`, `quality`, `minutes`, `tldr`, `category`, `topics`, `topTopic` (the heaviest-weighted topic, shown on the cover), `notes`. Generated files: change the weights or the script, not these. `attention` lists items the reader has to look at themselves, shown at the top of the library page: `{item, title, url, kind: "fetch" | "analysis", reason, attempts?, at}` for `failed` items and for items whose analysis keeps failing. `topics` lists the topics present in the queue as `{label, weight, count}`, ordered by the reader's weight (the page's filter chips).
+Written by `read-later-rank`; the only input `read-later-deliver` needs besides the items. Buckets `read_today`, `read_next`, `later`; each entry carries `item`, `title`, `url`, `priority`, `relevance`, `quality`, `minutes`, `tldr`, `category`, `topics`, `topTopic` (the heaviest-weighted topic, shown on the cover), `notes`. `attention` lists what the reader must look at: items whose fetch or analysis failed (`kind` `fetch` or `analysis`) and Slack links the sweep could not hand to ingest (`kind` `slack`, with `by`, `reason`, `sourceRef`). Generated files: change the weights or the script, not these. `attention` lists items the reader has to look at themselves, shown at the top of the library page: `{item, title, url, kind: "fetch" | "analysis", reason, attempts?, at}` for `failed` items and for items whose analysis keeps failing. `topics` lists the topics present in the queue as `{label, weight, count}`, ordered by the reader's weight (the page's filter chips).
 
 ## Delivery — `queue.html`, `deliver.json`
 

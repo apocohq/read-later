@@ -81,7 +81,16 @@ def entry(root: Path, e: dict, bucket: str) -> dict:
         "notes": e.get("notes", []),
         "markdown": body,
         "highlights": highlights,
+        "via": via(item),
     }
+
+
+def via(item: dict) -> dict | None:
+    """Who shared the item and where, from the first capture that says so (Slack captures carry recommendedBy, sourceRef and the poster's words as note)."""
+    for c in item.get("captures", []):
+        if c.get("recommendedBy") or c.get("sourceRef"):
+            return {"by": c.get("recommendedBy"), "ref": c.get("sourceRef"), "note": c.get("note")}
+    return None
 
 
 def main(argv: list[str]) -> int:

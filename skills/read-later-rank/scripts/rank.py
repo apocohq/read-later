@@ -100,6 +100,16 @@ def attention(folder: str, item: dict) -> dict | None:
     return None
 
 
+def slack_skipped(root: Path) -> list[dict]:
+    """Links the Slack sweep set aside (login walls, social posts): the reader can save them from the browser."""
+    try:
+        rows = json.loads((root / "slack" / "skipped.json").read_text())
+    except (OSError, ValueError):
+        return []
+    return [{"item": None, "title": s.get("title") or s["url"], "url": s["url"], "kind": "slack", "reason": s.get("reason") or "cannot fetch",
+             "by": s.get("by"), "sourceRef": s.get("permalink"), "at": s.get("at")} for s in rows if isinstance(s, dict) and s.get("url")]
+
+
 def minutes(item: dict) -> int:
     return max(1, round((item.get("words") or 0) / 230))
 
@@ -153,6 +163,7 @@ def main(argv: list[str]) -> int:
         priority, detail = s
         ranked.append({"item": f"items/{p.parent.name}", "title": item.get("title"), "url": item["url"], "priority": round(priority, 2),
                        "minutes": minutes(item), "analysis": item["analysis"], **detail})
+    needs += slack_skipped(root)
     ranked.sort(key=lambda e: (-e["priority"], e["item"]))
     buckets = {"read_today": ranked[: args.today], "read_next": ranked[args.today : args.today + args.next_], "later": ranked[args.today + args.next_ :]}
 

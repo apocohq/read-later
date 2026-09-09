@@ -534,7 +534,7 @@ Periodically derive proposed preference updates such as "prefer firsthand infras
 - Native mobile applications.
 - Full internal reading and annotation experience.
 - Continuous crawling of followed authors and sources.
-- Broad automatic ingestion of all Slack links.
+- Ingestion of every Slack link without judgment. (Revised in `design.md`: the sweep captures saved messages and self-DMs, and the agent judges the rest.)
 - Sophisticated organizational knowledge graph.
 - Automatic preference changes without review.
 - Complex multi-agent orchestration.

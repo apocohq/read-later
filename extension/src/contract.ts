@@ -6,6 +6,7 @@ export interface BrowserCapture {
   id: string;
   /** `remove` retracts an earlier capture of the same URL; `done` marks it as read. */
   action: "capture" | "remove" | "done";
+  /** Other producers use their own value: the Slack sweep writes `slack`, `slack-saved` or `slack-self` (plus `recommendedBy` and `sourceRef`). */
   source: "browser";
   url: string;
   title?: string;

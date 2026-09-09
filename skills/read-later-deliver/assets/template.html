@@ -101,6 +101,7 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 .chip.danger{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,var(--line));margin-left:auto}
 .chip.danger:hover{background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .pane .meta a{color:var(--accent);text-decoration:none}.pane .meta a:hover{text-decoration:underline}
+.pane .via{margin:8px 0 0;font-size:13px;line-height:1.45;color:var(--ink2);font-style:italic}.pane .via span{font-style:normal;color:var(--ink3)}
 .close{margin-left:auto;flex:none;border:1px solid var(--line);background:transparent;color:var(--ink2);border-radius:999px;width:34px;height:34px;cursor:pointer;font-size:18px;line-height:1}
 .pane .body{padding:22px 36px 60px;display:grid;gap:22px}
 .tldr{font-size:17px;line-height:1.5;margin:0}
@@ -201,9 +202,10 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
   (function(){
     const needs = DATA.attention || [], box = document.getElementById('attention');
     if (!needs.length) return;
-    const why = n => n.kind === 'fetch' ? `could not fetch the article${n.attempts > 1 ? ` (${n.attempts} attempts)` : ''}` : `analysis failed: ${n.reason || ''}`;
-    box.innerHTML = `<h2>Needs attention <small>${needs.length}</small></h2><ul>${needs.map(n => `<li><span class="t">${esc(n.title||n.url)}</span><span>${esc(domain(n.url))}</span><span class="why">${esc(why(n))}</span><a href="${esc(n.url)}" target="_blank" rel="noopener">Open original ↗</a></li>`).join('')}</ul>` +
-      (needs.some(n => n.kind === 'fetch') ? '<p class="hint">Could not fetch: open the page, let it load fully, and save it again from the browser; or remove it from Read Later.</p>' : '');
+    const why = n => n.kind === 'fetch' ? `could not fetch the article${n.attempts > 1 ? ` (${n.attempts} attempts)` : ''}` : n.kind === 'slack' ? `shared by ${n.by || 'someone'} on Slack; ${n.reason || 'cannot fetch'}` : `analysis failed: ${n.reason || ''}`;
+    box.innerHTML = `<h2>Needs attention <small>${needs.length}</small></h2><ul>${needs.map(n => `<li><span class="t">${esc(n.title||n.url)}</span><span>${esc(domain(n.url))}</span><span class="why">${esc(why(n))}</span><a href="${esc(n.url)}" target="_blank" rel="noopener">Open original ↗</a>${n.sourceRef ? `<a href="${esc(n.sourceRef)}" target="_blank" rel="noopener">Slack ↗</a>` : ''}</li>`).join('')}</ul>` +
+      (needs.some(n => n.kind === 'fetch') ? '<p class="hint">Could not fetch: open the page, let it load fully, and save it again from the browser; or remove it from Read Later.</p>' : '') +
+      (needs.some(n => n.kind === 'slack') ? '<p class="hint">From Slack but behind a login or on a social site: open it and save it from the browser if you want it.</p>' : '');
     box.hidden = false;
   })();
 
@@ -215,7 +217,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
           <div class="kicker"><span class="cat">${esc(it.category||'')}</span>${it.mustRead ? '<span class="pill">must</span>' : ''}</div>
           ${it.topTopic ? `<div class="topic">${esc(it.topTopic)}</div>` : ''}
         </div>
-        <div class="mid"><div class="src serif">${esc(domain(it.url))}</div><div class="title serif">${esc(it.title||it.url)}</div></div>
+        <div class="mid"><div class="src serif">${esc(domain(it.url))}${it.via && it.via.by ? ' · via Slack' : ''}</div><div class="title serif">${esc(it.title||it.url)}</div></div>
         <div class="foot"><span>${esc(it.minutes)} min${HL.current(it).length ? ' · '+HL.current(it).length+' ✎' : ''}</span><span class="badge" title="Overall score: half relevance, half quality; long reads lose a point, must-read gains three">${score10(it.priority)}</span></div>
       </div>
       <div class="under">
@@ -398,8 +400,10 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
           <div class="meta">
             <span title="Overall score, 0-10"><b>${score10(it.priority)}</b></span><span>${esc(domain(it.url))}</span>${it.author ? `<span>${esc(it.author)}</span>` : ''}${it.published ? `<span>${esc(it.published)}</span>` : ''}
             <span>${esc(it.minutes)} min</span><span>${esc(it.category)}${it.contentType ? ' · '+esc(it.contentType) : ''}</span>
+            ${it.via && it.via.by ? `<span>shared by ${esc(it.via.by)}${it.via.ref ? ` <a href="${esc(it.via.ref)}" target="_blank" rel="noopener" title="Open the Slack message">↗</a>` : ''}</span>` : ''}
             <a href="${esc(it.url)}" target="_blank" rel="noopener">Open original ↗</a>
           </div>
+          ${it.via && it.via.note ? `<p class="via">“${esc(it.via.note)}” <span>— ${esc(it.via.by || 'Slack')}</span></p>` : ''}
           <div class="tools" id="tools"></div>
         </div>
         <button class="close" aria-label="Close">×</button>
