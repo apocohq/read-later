@@ -54,3 +54,20 @@ Unattended runs reach the network through the egress gateway; the `all` preset a
 ## Not yet
 
 Web UI, cross-user items, team routing, preference learning, author following, audio, e-ink, internal reader.
+
+## PDF extraction: library choice
+
+Measured 2026-09-09 on two arXiv papers: the single-column ACMM report (28 pages, 3 tables) and the two-column BERT paper (16 pages, tables). "Install" is the uv environment on macOS; ML tools also download models on first run. All runs offline after install, no OCR.
+
+| library | install | ACMM / BERT time | headings | tables | two columns | licence | verdict |
+|---|---|---|---|---|---|---|---|
+| **pymupdf4llm** 1.28 (PyMuPDF + layout model) | 230 MB | 2.7 s / 3.0 s | full hierarchy (h1–h3) | all found, `<br>` in wrapped cells | correct order | AGPL | **chosen** |
+| docling 2 (IBM) | 1.2 GB + models | 125 s first run, 8 s after | all flattened to `##` | best: every cell right | correct order | MIT | fallback if AGPL is a problem |
+| marker 1 | 1.1 GB + models | 68 s first run, 3.6 s after | levels wobble, HTML anchors leak in | good, some cells split | correct order | GPL-3 + non-commercial model weights | no |
+| unstructured (fast) | ~1 GB | slow install | 392 "titles" | none, columns transposed | broken | Apache-2 | no (hi_res needs models) |
+| markitdown (pdfminer) | 150 MB | 1 s | none | none (dashes miscounted) | interleaved, spaces lost | MIT | no |
+| pdfplumber | 44 MB | 1.2 s | none | found, rows as text | interleaved | MIT | no |
+| kreuzberg | 80 MB | 0.4 s | none | none | ok | MIT | no |
+| pdftotext -layout (poppler) | system | 0.1 s | none | whitespace-aligned only | ok | GPL | no |
+
+pymupdf4llm is the only small, fast option that keeps the heading hierarchy and reading order and emits real pipe tables; its layout step is a bundled ONNX classifier, deterministic and offline. Docling produces the cleanest tables but costs a gigabyte-class install, a two-minute first run and flat headings. Revisit if the agent image ever ships torch anyway, or if AGPL matters.
