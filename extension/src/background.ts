@@ -120,10 +120,10 @@ async function capture(opts: { mustRead: boolean; note?: string }): Promise<void
 }
 
 /**
- * Send a `remove` or `done` event for the current tab. Remove forgets the page locally;
- * done keeps it with a `done` flag so the icon can say "you read this" on a revisit.
+ * Send a `remove` (archive), `delete` or `done` event for the current tab. Remove and delete forget the
+ * page locally; done keeps it with a `done` flag so the icon can say "you read this" on a revisit.
  */
-async function sendAction(action: "remove" | "done"): Promise<void> {
+async function sendAction(action: "remove" | "done" | "delete"): Promise<void> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id || !tab.url) return;
   const settings = await loadSettings();
@@ -174,7 +174,8 @@ function installMenus(): void {
     chrome.contextMenus.create({ id: "capture", title: "Read later", contexts });
     chrome.contextMenus.create({ id: "capture-must-read", title: "Read later (must read)", contexts });
     chrome.contextMenus.create({ id: "done", title: "Mark as read", contexts });
-    chrome.contextMenus.create({ id: "remove", title: "Remove from Read Later", contexts });
+    chrome.contextMenus.create({ id: "remove", title: "Archive in Read Later", contexts });
+    chrome.contextMenus.create({ id: "delete", title: "Delete from Read Later", contexts });
   });
 }
 chrome.runtime.onInstalled.addListener(installMenus);
@@ -189,6 +190,7 @@ chrome.action.onClicked.addListener(() => void toggle());
 chrome.commands.onCommand.addListener((cmd) => void capture({ mustRead: cmd === "capture-must-read" }));
 chrome.contextMenus.onClicked.addListener((info) => {
   if (info.menuItemId === "remove") return void remove();
+  if (info.menuItemId === "delete") return void sendAction("delete");
   if (info.menuItemId === "done") return void sendAction("done");
   void capture({ mustRead: info.menuItemId === "capture-must-read", note: info.linkUrl ? `link: ${info.linkUrl}` : undefined });
 });
