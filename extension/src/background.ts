@@ -17,11 +17,21 @@ interface PageSnapshot {
 
 /** Runs inside the page. Must be self-contained: no imports, no closures. */
 function snapshotPage(): PageSnapshot {
+  let html: string | undefined;
+  if (/html/.test(document.contentType)) {
+    // A copy of the DOM without what no text or metadata extraction reads: scripts (JSON-LD kept, it
+    // is metadata), stylesheets, inline SVG, noscript, templates, and inline style attributes. On
+    // script-heavy pages that is two thirds of the bytes; the article, links, images and meta tags stay.
+    const root = document.documentElement.cloneNode(true) as HTMLElement;
+    root.querySelectorAll('script:not([type="application/ld+json"]), style, svg, noscript, template').forEach((el) => el.remove());
+    root.querySelectorAll("[style]").forEach((el) => el.removeAttribute("style"));
+    html = root.outerHTML;
+  }
   return {
     url: location.href,
     title: document.title,
     selectedText: window.getSelection()?.toString() ?? "",
-    html: /html/.test(document.contentType) ? document.documentElement.outerHTML : undefined,
+    html,
   };
 }
 
