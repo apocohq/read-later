@@ -13,3 +13,5 @@ Two integer scores, 0 to 10, each with `reason`: one sentence naming the evidenc
 - 10: specific claims, supported by data, examples or a clear chain of reasoning; admits limits; no sales agenda.
 
 Be strict. Most web writing sits between 3 and 6 on both. Reserve 9 and 10 for pieces you would cite.
+
+For a video or podcast you only see the publisher's description. Score what it shows: who speaks and from what experience (hard-won), and whether it names concrete topics and claims or just sells the episode (grounded). Do not assume depth the description does not show.

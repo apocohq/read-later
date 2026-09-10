@@ -218,7 +218,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
           ${it.topTopic ? `<div class="topic">${esc(it.topTopic)}</div>` : ''}
         </div>
         <div class="mid"><div class="src serif">${esc(domain(it.url))}${it.via && it.via.by ? ' · via Slack' : ''}</div><div class="title serif">${esc(it.title||it.url)}</div></div>
-        <div class="foot"><span>${esc(it.minutes)} min${HL.current(it).length ? ' · '+HL.current(it).length+' ✎' : ''}</span><span class="badge" title="Overall score: half relevance, half quality; long reads lose a point, must-read gains three">${score10(it.priority)}</span></div>
+        <div class="foot"><span>${it.kind ? esc(it.kind)+' · ' : ''}${esc(it.minutes)} min${HL.current(it).length ? ' · '+HL.current(it).length+' ✎' : ''}</span><span class="badge" title="Overall score: half relevance, half quality; long reads lose a point, must-read gains three">${score10(it.priority)}</span></div>
       </div>
       <div class="under">
         <div class="bars">
@@ -399,7 +399,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
           <h2 id="r-title" class="serif">${esc(it.title||it.url)}</h2>
           <div class="meta">
             <span title="Overall score, 0-10"><b>${score10(it.priority)}</b></span><span>${esc(domain(it.url))}</span>${it.author ? `<span>${esc(it.author)}</span>` : ''}${it.published ? `<span>${esc(it.published)}</span>` : ''}
-            <span>${esc(it.minutes)} min</span><span>${esc(it.category)}${it.contentType ? ' · '+esc(it.contentType) : ''}</span>
+            <span>${it.kind ? esc(it.kind)+' · ' : ''}${esc(it.minutes)} min</span><span>${esc(it.category)}${it.contentType ? ' · '+esc(it.contentType) : ''}</span>
             ${it.via && it.via.by ? `<span>shared by ${esc(it.via.by)}${it.via.ref ? ` <a href="${esc(it.via.ref)}" target="_blank" rel="noopener" title="Open the Slack message">↗</a>` : ''}</span>` : ''}
             <a href="${esc(it.url)}" target="_blank" rel="noopener">Open original ↗</a>
           </div>
