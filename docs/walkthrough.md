@@ -31,7 +31,7 @@ Authorization: Bearer pk_…          # scope agents:operate, bound to the one a
   "url": "https://…",                       // raw; the agent canonicalizes
   "title": "…",
   "selectedText": "…",                      // optional, what the user highlighted
-  "html": "<!doctype html>…",               // full rendered DOM, so paywalled/JS pages work
+  "html": "<html>…",                        // rendered DOM minus scripts and styles, so paywalled/JS pages work
   "note": "…",                              // optional
   "mustRead": false,
   "capturedAt": "2026-09-07T06:12:31.482Z"
