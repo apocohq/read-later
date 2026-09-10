@@ -204,7 +204,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
     if (!needs.length) return;
     const why = n => n.kind === 'fetch' ? `could not fetch the article${n.attempts > 1 ? ` (${n.attempts} attempts)` : ''}` : n.kind === 'slack' ? `shared by ${n.by || 'someone'} on Slack; ${n.reason || 'cannot fetch'}` : `analysis failed: ${n.reason || ''}`;
     box.innerHTML = `<h2>Needs attention <small>${needs.length}</small></h2><ul>${needs.map(n => `<li><span class="t">${esc(n.title||n.url)}</span><span>${esc(domain(n.url))}</span><span class="why">${esc(why(n))}</span><a href="${esc(n.url)}" target="_blank" rel="noopener">Open original ↗</a>${n.sourceRef ? `<a href="${esc(n.sourceRef)}" target="_blank" rel="noopener">Slack ↗</a>` : ''}</li>`).join('')}</ul>` +
-      (needs.some(n => n.kind === 'fetch') ? '<p class="hint">Could not fetch: open the page, let it load fully, and save it again from the browser; or remove it from Read Later.</p>' : '') +
+      (needs.some(n => n.kind === 'fetch') ? '<p class="hint">Could not fetch: open the page, let it load fully, and save it again from the browser; or archive it.</p>' : '') +
       (needs.some(n => n.kind === 'slack') ? '<p class="hint">From Slack but behind a login or on a social site: open it and save it from the browser if you want it.</p>' : '');
     box.hidden = false;
   })();
@@ -375,11 +375,12 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       const json = hasFile ? JSON.stringify(file(it), null, 2) : '';
       const fileLine = `Read later highlights, replace items/${it.id}/highlights.json with this file:\n\n${json}`;
       if (action === 'done') return `Read later, done reading, mark it as read: ${it.url}` + (json ? `\n\n${fileLine}` : '');
-      if (action === 'remove') return `Read later, remove this article from my list: ${it.url}`;
+      if (action === 'remove') return `Read later, archive this article: ${it.url}`;
+      if (action === 'delete') return `Read later, delete this article for good: ${it.url}`;
       return fileLine;
     };
     const transports = [
-      async (text, action, ui) => { try { await navigator.clipboard.writeText(text); ui.toast(action === 'done' ? 'Copied. Paste it to your agent to finish this article.' : action === 'remove' ? 'Copied. Paste it to your agent to remove this article.' : 'Copied. Paste it to your agent.'); } catch { ui.fallback(text); } return true; },
+      async (text, action, ui) => { try { await navigator.clipboard.writeText(text); ui.toast(action === 'done' ? 'Copied. Paste it to your agent to finish this article.' : action === 'remove' ? 'Copied. Paste it to your agent to archive this article.' : action === 'delete' ? 'Copied. Paste it to your agent to delete this article.' : 'Copied. Paste it to your agent.'); } catch { ui.fallback(text); } return true; },
     ];
     async function emit(it, action, ui){ const text = payload(it, action); for (const t of transports) if (await t(text, action, ui)) return text; return null; }
     function setColorOf(it, id, color){ const st = state(it); const mine = st.added.find(h => h.id === id); if (mine){ mine.color = color; save(it, st); return; } const src = synced(it).find(h => h.id === id); if (!src) return; st.added.push({...src, id: newId('h'), color}); if (!st.deleted.some(d => d.id === id)) st.deleted.push({id, at: Date.now()}); save(it, st); }
@@ -452,12 +453,14 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
         <span class="sep"></span>
         <button class="chip" id="hl-copy" ${list.length ? '' : 'disabled'} title="Copy highlights.json for your agent">Copy for chat</button>
         <button class="chip" id="hl-done" title="Copy a done message, with the highlights, for your agent">Done reading</button>
-        <button class="chip danger" id="hl-remove" title="Copy a message asking your agent to remove this article">Remove</button>`;
+        <button class="chip" id="hl-remove" title="Copy a message asking your agent to archive this article (it leaves the queue, the folder stays)">Archive</button>
+        <button class="chip danger" id="hl-delete" title="Copy a message asking your agent to delete this article for good">Delete</button>`;
       tools.querySelector('#hl-toggle').addEventListener('click', () => { hlOn = !hlOn; closePop(); article.classList.toggle('hl-on', hlOn); renderTools(); renderPanel(); });
       tools.querySelectorAll('.sw').forEach(b => b.addEventListener('click', () => { HL.setColor(b.dataset.c); renderTools(); }));
       tools.querySelector('#hl-copy').addEventListener('click', () => HL.emit(it, 'highlight', ui));
       tools.querySelector('#hl-done').addEventListener('click', () => HL.emit(it, 'done', ui));
       tools.querySelector('#hl-remove').addEventListener('click', () => HL.emit(it, 'remove', ui));
+      tools.querySelector('#hl-delete').addEventListener('click', () => HL.emit(it, 'delete', ui));
     }
     function renderPanel(){
       const list = HL.current(it), unsent = list.filter(h => HL.isLocal(it, h.id)).length;

@@ -26,7 +26,9 @@ and the publisher's description as content.md, and skip the minimum-words check.
 Dedup key is the canonical `url` inside each item.json; there is no separate index.
 
 Events: `capture` (default) adds a page; `remove` retracts earlier captures of the same URL
-(drops unprocessed ones, archives a processed item); `done` marks a processed item as read.
+(drops unprocessed ones, archives a processed item); `done` marks a processed item as read;
+`delete` retracts like `remove` and then removes the item folder for good, wherever prune left it
+(items/, done/ or archive/). A later capture of the same URL starts a fresh item.
 A capture of an item that is `done` reopens it. A capture with HTML of an item that already has text
 is extracted again, and the new text replaces the old when it is clearly larger (twice the words and
 at least REDO_MIN_GROWTH more) or the analyzer had judged the old text `not-an-article`; the analysis
@@ -49,6 +51,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import sys
 import unicodedata
 import urllib.request
@@ -87,7 +90,7 @@ def load_events(inbox: Path) -> list[dict]:
                 raise ValueError("missing url or capturedAt")
             ev.setdefault("action", "capture")
             ev.setdefault("source", "unknown")
-            if ev["action"] not in ("capture", "remove", "done"):
+            if ev["action"] not in ("capture", "remove", "done", "delete"):
                 raise ValueError(f"unknown action {ev['action']!r}")
             ev["_path"] = path
             events.append(ev)
@@ -443,6 +446,24 @@ class Store:
         with (self.root / "feedback.jsonl").open("a") as f:
             f.write(json.dumps(line) + "\n")
 
+    def find_anywhere(self, canonical: str) -> Path | None:
+        """The item's folder in items/, done/ or archive/ (prune moves folders out of the pool); None if unknown."""
+        if folder := self.by_url.get(canonical):
+            return self.items / folder
+        for pool in ("done", "archive"):
+            for p in (self.root / pool).glob("*/item.json"):
+                try:
+                    if json.loads(p.read_text()).get("url") == canonical:
+                        return p.parent
+                except Exception:  # noqa: BLE001
+                    continue
+        return None
+
+    def delete(self, path: Path) -> None:
+        """Remove an item folder for good and forget it. Only a `delete` event gets here."""
+        shutil.rmtree(path)
+        self.by_url = {u: f for u, f in self.by_url.items() if f != path.name or path.parent != self.items}
+
 
 def first_title(evs: list[dict]) -> str | None:
     return next((e["title"] for e in evs if e.get("title")), None)
@@ -480,23 +501,34 @@ def apply_done(store: Store, events: list[dict]) -> list[dict]:
 
 
 def apply_removals(store: Store, events: list[dict]) -> dict[str, list[dict]]:
-    """Group by canonical URL. Per URL the last event in time decides; a remove retracts everything before it."""
+    """Group by canonical URL. Per URL the last event in time decides; a remove or delete retracts everything before it.
+
+    A delete also removes the existing item folder, wherever prune left it; captures after it start a fresh item.
+    """
     groups: dict[str, list[dict]] = {}
     for ev in events:
         groups.setdefault(canonicalize(ev["url"]), []).append(ev)
     survivors: dict[str, list[dict]] = {}
     for canonical, group in groups.items():
-        group.sort(key=lambda e: (e["capturedAt"], e["action"] == "capture"))  # remove sorts first on a tie
-        last_remove = max((i for i, e in enumerate(group) if e["action"] == "remove"), default=-1)
-        keep = [e for i, e in enumerate(group) if e["action"] == "capture" and i > last_remove]
+        group.sort(key=lambda e: (e["capturedAt"], e["action"] == "capture"))  # remove/delete sort first on a tie
+        retracts = [i for i, e in enumerate(group) if e["action"] in ("remove", "delete")]
+        last_retract = retracts[-1] if retracts else -1
+        keep = [e for i, e in enumerate(group) if e["action"] == "capture" and i > last_retract]
         for e in group:
             if e not in keep:
-                why = "remove event" if e["action"] == "remove" else "retracted by a later remove"
+                why = f"{e['action']} event" if e["action"] != "capture" else f"retracted by a later {group[last_retract]['action']}"
                 print(f"dropped   {e['_path'].name}  {why}  {canonical}", file=sys.stderr)
                 e["_path"].unlink(missing_ok=True)
+        if deletes := [group[i] for i in retracts if group[i]["action"] == "delete"]:
+            if path := store.find_anywhere(canonical):
+                store.delete(path)
+                store.feedback({"item": path.name, "action": "delete", "reason": f"deleted via {deletes[-1].get('source', '?')}", "at": now()})
+                print(f"deleted   {path.parent.name}/{path.name}", file=sys.stderr)
+            else:
+                print(f"dropped   delete for an unknown item  {canonical}", file=sys.stderr)
         if keep:
             survivors[canonical] = keep
-        elif (found := store.get(canonical)) and found[1]["status"] != "archived":
+        elif not deletes and (found := store.get(canonical)) and found[1]["status"] != "archived":
             folder, item = found
             item["status"] = "archived"
             store.save(folder, item)

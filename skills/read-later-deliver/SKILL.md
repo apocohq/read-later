@@ -14,7 +14,7 @@ The page is `assets/template.html` (design) plus data injected by `scripts/rende
 
 ## Highlights
 
-In the reader pane the reader turns the highlighter on (pen icon in the sticky header, with five colors), selects text, and gets a mark; clicking a mark adds a note, changes its color or removes it. The list of highlights sits below the article. The header also has **Remove**, which copies a one-line request to drop the article. Highlights live in the reader's browser (localStorage per item, or only in memory in DAM's sandboxed viewer, which the page says) until **Copy for chat** or **Done reading** puts the content of `highlights.json` on the clipboard and the reader pastes it into chat. The renderer injects that file back into the page, so after the next publish the highlights show in every browser; marks not yet sent are underlined and counted as "unsent". The page cannot write to the agent yet; when DAM's artifact bridge ships, the artifact will write the file itself.
+In the reader pane the reader turns the highlighter on (pen icon in the sticky header, with five colors), selects text, and gets a mark; clicking a mark adds a note, changes its color or removes it. The list of highlights sits below the article. The header also has **Archive** and **Delete**, which copy a one-line request to drop the article: archive keeps the folder and leaves the queue, delete removes the folder for good. Highlights live in the reader's browser (localStorage per item, or only in memory in DAM's sandboxed viewer, which the page says) until **Copy for chat** or **Done reading** puts the content of `highlights.json` on the clipboard and the reader pastes it into chat. The renderer injects that file back into the page, so after the next publish the highlights show in every browser; marks not yet sent are underlined and counted as "unsent". The page cannot write to the agent yet; when DAM's artifact bridge ships, the artifact will write the file itself.
 
 ### When the reader pastes highlights
 
@@ -25,7 +25,7 @@ The paste reads "Read later highlights, replace `items/<folder>/highlights.json`
 3. Append one line to `~/work/read-later/feedback.jsonl`: `{"item": "<folder>", "action": "highlight", "reason": "<n> highlight(s) via paste", "at": "<now, ISO>"}`.
 4. Reply with one line: how many highlights the file holds, e.g. "saved 4 highlights". They show in the library page after the next deliver. Do not inspect, dedupe or comment on the highlights themselves.
 
-If the paste is "Read later, remove this article from my list: <url>" (the page's **Remove** button), file a `remove` event the way `read-later-ingest` describes for chat and run its script; the item is archived, never deleted, and leaves the queue at the next deliver.
+If the paste is "Read later, archive this article: <url>" (the page's **Archive** button; older pages say "remove this article from my list"), file a `remove` event the way `read-later-ingest` describes for chat and run its script; the item is archived and leaves the queue at the next deliver. If the paste is "Read later, delete this article for good: <url>" (the **Delete** button), file a `delete` event the same way; the script removes the item folder, including highlights. Do not delete anything by hand.
 
 If the paste starts with "Read later, done reading, mark it as read: <url>", also mark the item read the way `read-later-ingest` describes for chat: one `done` event into the inbox, then run its script. Highlights first, then done.
 
@@ -56,5 +56,5 @@ Reply with the internal link as a markdown link (`[Read later](platform://artifa
 ## Rules
 
 - `queue.html` and `deliver.json` are generated; fix the template, the renderer or the ranking, never the files.
-- The artifact is a static page; it cannot call the agent. Marking something read or removing it happens through the Chrome extension ("Mark as read", "Remove from Read Later"), by telling the agent, or by pasting the page's **Done reading** message into chat. Highlights reach the agent only through that paste.
+- The artifact is a static page; it cannot call the agent. Marking something read, archiving or deleting it happens through the Chrome extension ("Mark as read", "Archive in Read Later", "Delete from Read Later"), by telling the agent, or by pasting the page's **Done reading**, **Archive** or **Delete** message into chat. Highlights reach the agent only through that paste.
 - `highlights.json` is written only from a paste, verbatim. Never compose or edit one yourself.

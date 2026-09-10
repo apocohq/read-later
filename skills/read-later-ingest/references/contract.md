@@ -22,7 +22,7 @@ Written by producers (the Chrome extension, `read-later-slack`, the agent from c
 | field | required | meaning |
 |---|---|---|
 | `id` | yes | unique, time-sortable, also the filename |
-| `action` | no | `capture` (default); `remove` = retract earlier captures of this URL (drop if unprocessed, archive if processed); `done` = the reader finished it |
+| `action` | no | `capture` (default); `remove` = retract earlier captures of this URL (drop if unprocessed, archive if processed); `done` = the reader finished it; `delete` = retract like `remove`, then remove the item folder for good (from `items/`, `done/` or `archive/`); a later capture starts a fresh item |
 | `source` | yes | `browser`; `chat` (the agent, on the reader's word); `slack` (a link from a message the reader saved in Slack); other producers add their own value |
 | `url` | yes | as seen; canonicalization happens here, not in the producer |
 | `title` | no | page title |
@@ -138,7 +138,7 @@ For a PDF the Markdown comes from PyMuPDF's layout analysis: headings by level, 
 
 ## Folders
 
-`items/` is the live pool and the only folder `rank` reads. `read-later-prune` moves whole item folders to `done/` (status `done`) or `archive/` (status `archived`, `not-an-article`, or unread for 30 days and not must-read). Nothing is deleted.
+`items/` is the live pool and the only folder `rank` reads. `read-later-prune` moves whole item folders to `done/` (status `done`) or `archive/` (status `archived`, `not-an-article`, or unread for 30 days and not must-read). Nothing is deleted by prune; only a `delete` event removes a folder, and it works in all three.
 
 ## Slack state — `slack/`
 
@@ -165,4 +165,4 @@ Written by `read-later-rank`; the only input `read-later-deliver` needs besides 
 
 ## Log — `feedback.jsonl`
 
-Append-only, one JSON object per line, e.g. `{"item": "<folder>", "action": "archive", "reason": "removed via browser", "at": "…"}`.
+Append-only, one JSON object per line, e.g. `{"item": "<folder>", "action": "archive", "reason": "removed via browser", "at": "…"}`. Actions: `done`, `archive`, `reopen`, `delete` (ingest), `move:<folder>` (prune), `highlight` (the reader's paste). Nothing reads it yet; it is the audit trail and a future signal for the reweigh.

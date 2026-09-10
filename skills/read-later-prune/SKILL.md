@@ -22,7 +22,7 @@ From this skill's directory:
 python3 scripts/prune.py ~/work/read-later
 ```
 
-Rules, in order: status `done` → `done/`; status `archived` (the reader un-bookmarked it) → `archive/`; `contentType` `not-an-article` → `archive/`; unread for more than 30 days and not must-read → `archive/`. Nothing is deleted; each move is logged to `feedback.jsonl`. `rank` reads only `items/`, so anything moved leaves the queue.
+Rules, in order: status `done` → `done/`; status `archived` (the reader un-bookmarked it) → `archive/`; `contentType` `not-an-article` → `archive/`; unread for more than 30 days and not must-read → `archive/`. Prune deletes nothing; each move is logged to `feedback.jsonl`. Only a `delete` event through `read-later-ingest` removes a folder. `rank` reads only `items/`, so anything moved leaves the queue.
 
 ## Then tidy the vocabulary
 
@@ -40,5 +40,5 @@ Report: what moved and why, one line each; which labels you weighed, merged or d
 
 ## Rules
 
-- Never delete an item folder. `archive/` is the end of the line, and it stays.
+- Never delete an item folder. `archive/` is the end of the line, and it stays unless the reader sends a `delete` event through `read-later-ingest`.
 - `done/` is the reader's own record of what they valued; leave it alone.

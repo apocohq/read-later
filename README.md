@@ -17,7 +17,7 @@ Chrome extension ─▶ inbox/<id>.json ─▶ ingest ─▶ items/ ─▶ analy
 
 - **The library**: one artifact in the DAM artifact library, updated in place. Book-shaped tiles on three shelves (Tonight: three picks, Next: four, Later: the rest), each with segmented 0-10 bars for relevance, hard-won and grounded. Click a tile for the TL;DR, key claims, the scores with their reasons, and the full article text.
 - **Analysis you can argue with**: every score carries a one-sentence reason from the text. The rubric is three prompt files; the category list and topic vocabulary are one editable file; your interests are weights on topics.
-- **Actions from where you read**: in Chrome, right-click for *Mark as read* or *Remove from Read Later*. In chat, tell the agent. The page itself is static.
+- **Actions from where you read**: in Chrome, right-click for *Mark as read*, *Archive in Read Later* or *Delete from Read Later*. In chat, tell the agent. The page itself is static.
 - **One unattended refresh a day** (`read-later-refresh`, 18:00 Prague) and one weekly tidy (`read-later-prune`). A refresh costs the agent one short turn plus one isolated model run per new article; the page is republished only when something changed.
 
 ## Install

@@ -26,7 +26,7 @@ Authorization: Bearer pk_…          # scope agents:operate, bound to the one a
 ```json
 {
   "id": "2026-09-07T06-12-31-482Z-k3f9a",   // unique, time-sortable, also the filename
-  "action": "capture",                      // "remove" = retract / archive, "done" = finished reading
+  "action": "capture",                      // "remove" = retract / archive, "done" = finished reading, "delete" = remove for good
   "source": "browser",
   "url": "https://…",                       // raw; the agent canonicalizes
   "title": "…",
