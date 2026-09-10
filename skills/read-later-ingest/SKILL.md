@@ -34,7 +34,8 @@ uv run scripts/ingest.py ~/work/read-later
 1. **Canonicalize and dedupe.** Strips fragment, `www.`, tracking params. The same page captured twice is one item with two capture records.
 2. **Retract.** A `remove` event retracts captures of the same URL that came before it. Unprocessed ones are dropped; an already extracted item is archived and a line goes to `feedback.jsonl`. Nothing is ever deleted from `items/`.
 3. **Extract.** Captured HTML → readability + markdownify → Markdown with headings, links, tables and images; title, author and date via trafilatura. Fallback: fetch the URL; an HTML response goes through the same extraction, a PDF (arXiv papers, reports) through PyMuPDF's layout analysis → Markdown with headings and tables, no OCR, no images; for arXiv the abstract page supplies title, authors and date. Fallback: the event's own `text`. Under 80 words counts as failure. A **video or podcast page** (YouTube, Spotify episodes, anything with an Open Graph video or music type) has no article: the item gets `kind`, `durationSeconds`, `image`, the channel or show as `author`, and the publisher's description as its content, however short.
-4. **Save.** `items/<capturedAt>-<title slug>/item.json` and `content.md`. The HTML is not kept. The inbox file is deleted.
+4. **Again.** Saving a page again reopens it if it was `done`. If the analyzer had judged it `not-an-article` and the new capture carries HTML, the item is extracted again from that HTML and re-analyzed; the old text and analysis are replaced.
+5. **Save.** `items/<capturedAt>-<title slug>/item.json` and `content.md`. The HTML is not kept. The inbox file is deleted.
 
 ## Marking an item as read or removing it from chat
 

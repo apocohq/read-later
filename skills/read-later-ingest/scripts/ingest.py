@@ -27,6 +27,8 @@ Dedup key is the canonical `url` inside each item.json; there is no separate ind
 
 Events: `capture` (default) adds a page; `remove` retracts earlier captures of the same URL
 (drops unprocessed ones, archives a processed item); `done` marks a processed item as read.
+A capture of an item that is `done` reopens it; a capture with HTML of an item the analyzer
+judged `not-an-article` extracts it again from that HTML and drops the old analysis.
 
 Content: captured HTML → readability; else fetch the URL, which may be HTML or a PDF (PyMuPDF layout
 → Markdown with headings and tables, no OCR, no images); else the event's own `text`.
@@ -541,8 +543,14 @@ def main(argv: list[str]) -> int:
             item.pop("doneAt", None)
             store.feedback({"item": found[0], "action": "reopen", "reason": f"captured again via {evs[-1].get('source', '?')}", "at": now()})
             print(f"reopened  items/{found[0]}", file=sys.stderr)
+        redo = bool(found) and (item.get("analysis") or {}).get("contentType") == "not-an-article" and any(e.get("html") for e in evs)
+        if redo:  # the reader saved a page the analyzer had rejected, and this time the browser sent its HTML: extract again
+            item.pop("analysis", None)
+            item.pop("analysisError", None)
+            store.feedback({"item": found[0], "action": "re-extract", "reason": f"not-an-article, captured again with HTML via {evs[-1].get('source', '?')}", "at": now()})
+            print(f"redo      items/{found[0]}  not-an-article, captured again with HTML", file=sys.stderr)
         markdown = None
-        if not found or not (store.items / found[0] / "content.md").exists():
+        if not found or redo or not (store.items / found[0] / "content.md").exists():
             if content := acquire(canonical, evs):
                 markdown = content.pop("markdown")
                 item.update({k: v for k, v in content.items() if v is not None}, status="extracted")
