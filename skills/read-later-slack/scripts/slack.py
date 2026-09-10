@@ -1,25 +1,20 @@
 #!/usr/bin/env python3
 """
-Sweep Slack for links worth reading and turn them into read-later inbox events.
+Turn the reader's saved Slack messages ("Save for later") into read-later inbox events.
 
-Two commands:
+  slack.py STATE_DIR [--dry-run] [--json]
 
-  sweep    STATE_DIR   Search Slack through the Slack MCP server: the reader's saved
-                       messages, then every link shared since the last sweep. Every link
-                       goes to a numbered shortlist, printed on stdout and kept in
-                       STATE_DIR/slack/shortlist.json, for the agent to judge; "saved by
-                       you" and "your own DM" are hints on the line, not decisions. Links
-                       that cannot be fetched (login walls, social posts) are listed in
-                       STATE_DIR/slack/skipped.json for the library page.
-  capture  STATE_DIR --picks 1,4,7 | none
-                       Write inbox events for the picked shortlist entries; remember the
-                       rest as rejected so they are not shown again (unless someone else
-                       shares the same link later).
+Searches Slack for `is:saved has:link` through the Slack MCP server and writes one
+inbox event per new link found in a saved message. Saving is the reader's explicit
+action, like the extension's bookmark button, so nothing is judged here. Links that
+are never reading material (Slack permalinks, meetings, tickets, images) are dropped;
+links the fetch fallback cannot reach (login walls, social posts) are listed in
+STATE_DIR/slack/skipped.json for the library page instead of captured.
 
 Runs on a DAM agent that holds the Slack connection: the egress gateway adds the token,
-the script only speaks MCP to https://mcp.slack.com/mcp. It calls two read-only tools and
-nothing else (see ALLOWED_TOOLS). Slack text never reaches the agent except as the trimmed
-snippets in the shortlist.
+the script only speaks MCP to https://mcp.slack.com/mcp. It calls two read-only tools
+and nothing else (see ALLOWED_TOOLS). Slack text never reaches the agent; the poster's
+words travel as the event's `note`.
 
 Standard library only. Exit codes: 0 ran, 2 bad arguments, 3 STATE_DIR or Slack unusable.
 """
@@ -41,10 +36,8 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 MCP_URL = "https://mcp.slack.com/mcp"
 ALLOWED_TOOLS = {"slack_search_public_and_private", "slack_read_user_profile"}
 PAGE = 20  # the server's maximum
-SEEN_DAYS = 60  # forget decisions older than this; items/ still dedupes captured URLs
-SNIPPET = 280
-CONTEXT_LINES = 3
-CONTEXT_CHARS = 160
+SEEN_DAYS = 90  # forget decisions older than this; items/ still dedupes captured URLs
+NOTE_CHARS = 280
 
 # Same rules as read-later-ingest so both sides agree on identity.
 TRACKING = re.compile(r"^(utm_|fbclid$|gclid$|mc_|ref$|source$|si$)")
@@ -93,7 +86,7 @@ def canonicalize(url: str) -> str:
 class Slack:
     def __init__(self, url: str = MCP_URL):
         self.url, self.sid = url, None
-        self.rpc("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "read-later-slack", "version": "0.1"}})
+        self.rpc("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "read-later-slack", "version": "0.2"}})
 
     def rpc(self, method: str, params: dict) -> dict:
         body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode()
@@ -142,11 +135,11 @@ class Slack:
             raise SystemExit("error: could not read my own Slack user id")
         return {"id": fields["User ID"], "name": fields.get("Real Name") or fields.get("Display Name") or fields.get("Username", "")}
 
-    def search(self, query: str, max_pages: int, stop_before: float | None = None) -> list[dict]:
+    def search(self, query: str, max_pages: int) -> list[dict]:
         """All message hits for a Slack search query, newest first, across pages."""
         hits, cursor = [], None
         for _ in range(max_pages):
-            args = {"query": query, "content_types": "messages", "limit": PAGE, "sort": "timestamp", "sort_dir": "desc", "include_context": True, "include_bots": False}
+            args = {"query": query, "content_types": "messages", "limit": PAGE, "sort": "timestamp", "sort_dir": "desc", "include_context": False, "include_bots": True}
             if cursor:
                 args["cursor"] = cursor
             res = self.tool("slack_search_public_and_private", args)
@@ -154,7 +147,7 @@ class Slack:
             hits += page
             m = re.search(r"cursor `([^`]+)`", res.get("pagination_info", "") or "")
             cursor = m.group(1) if m else None
-            if not cursor or not page or (stop_before and page[-1]["ts"] < stop_before):
+            if not cursor or not page:
                 break
             time.sleep(1)  # search is rate limited per minute; a daily sweep is in no hurry
         return hits
@@ -167,7 +160,7 @@ def parse_results(md: str) -> list[dict]:
     """The search tool answers in Markdown. One dict per '### Result' block."""
     out = []
     for block in re.split(r"^### Result \d+ of \d+\s*$", md, flags=re.M)[1:]:
-        hit: dict = {"text": "", "context": []}
+        hit: dict = {"text": ""}
         lines, i = block.strip("\n").split("\n"), 0
         while i < len(lines) and (m := HEAD.match(lines[i])):
             k, v = m.group(1), m.group(2).strip()
@@ -181,27 +174,18 @@ def parse_results(md: str) -> list[dict]:
                 hit["from"], hit["fromId"], hit["bot"] = (fm.group(1), fm.group(2), bool(fm.group(3))) if fm else (v, "", False)
             elif k == "Message_ts":
                 hit["ts"] = float(v) if re.match(r"^\d+(\.\d+)?$", v) else 0.0
-            elif k == "Reply count":
-                hit["replies"] = int(v) if v.isdigit() else 0
             elif k == "Permalink":
                 pm = re.search(r"\((https?://[^)]+)\)", v)
                 hit["permalink"] = pm.group(1) if pm else v
             i += 1
         if i < len(lines) and lines[i].startswith("Text:"):
             i += 1
-        body, ctx, mode = [], [], "text"
+        body = []
         for line in lines[i:]:
-            if line.strip() == "---":
+            if line.strip() == "---" or line.startswith("Context before:") or line.startswith("Context after:"):
                 break
-            if line.startswith("Context before:") or line.startswith("Context after:"):
-                mode = "ctx"
-                continue
-            if mode == "text":
-                body.append(line)
-            elif line.startswith("  ") and not line.strip().startswith("Message_ts:"):
-                ctx.append(line.strip())
+            body.append(line)
         hit["text"] = "\n".join(body).strip()
-        hit["context"] = ctx
         if hit.get("ts"):
             out.append(hit)
     return out
@@ -227,7 +211,9 @@ def links(text: str) -> list[tuple[str, str | None]]:
 
 
 def plain(text: str, limit: int) -> str:
+    """The poster's words without link markup, mentions resolved, whitespace collapsed, trimmed."""
     text = LINK.sub(lambda m: m.group(2) if m.group(2) and (" " in m.group(2) or not re.search(r"[./…]", m.group(2))) else "", text)
+    text = BARE.sub("", text)
     text = MENTION.sub(lambda m: "@" + (m.group(2) or m.group(1)), text)
     text = CHANNEL_REF.sub(lambda m: "#" + m.group(1), text)
     text = re.sub(r"\s+", " ", unescape(text)).strip()
@@ -272,83 +258,64 @@ def iso(ts: float) -> str:
     return datetime.fromtimestamp(ts, timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
-def event(c: dict, source: str) -> dict:
+def where(hit: dict, me: str) -> str:
+    ch = hit.get("channel", "")
+    if ch.startswith("#"):
+        return ch
+    others = [p for p in hit.get("participants", []) if p != me]
+    return "a DM" if others else "your own DM"
+
+
+def event(c: dict) -> dict:
     stamp = re.sub(r"[:.]", "-", c["at"].replace("Z", ""))[:23] + "Z"
-    ev = {"id": f"{stamp}-{hashlib.sha1(c['url'].encode()).hexdigest()[:6]}-slack", "action": "capture", "source": source, "url": c["raw"],
+    ev = {"id": f"{stamp}-{hashlib.sha1(c['url'].encode()).hexdigest()[:6]}-slack", "action": "capture", "source": "slack", "url": c["raw"],
           "capturedAt": c["at"], "mustRead": False, "sourceRef": c["permalink"]}
-    if c.get("title"):
-        ev["title"] = c["title"]
-    if c.get("text"):
-        ev["note"] = c["text"]
-    if c.get("recommendedBy"):
-        ev["recommendedBy"] = c["recommendedBy"]
+    for k in ("title", "note", "recommendedBy"):
+        if c.get(k):
+            ev[k] = c[k]
     return ev
 
 
-def write_event(root: Path, ev: dict, dry: bool) -> None:
-    path = root / "inbox" / f"{ev['id']}.json"
-    if not dry:
-        path.write_text(json.dumps(ev, ensure_ascii=False, indent=2) + "\n")
+# ---------- run ----------
 
-
-# ---------- sweep ----------
-
-def where(hit: dict, me: str) -> tuple[str, bool]:
-    """Human-readable place and whether it is the reader's own DM."""
-    ch = hit.get("channel", "")
-    if ch.startswith("#"):
-        return ch, False
-    others = [p for p in hit.get("participants", []) if p != me]
-    if not others:
-        return "your own DM", True
-    return "a DM", False
-
-
-def candidates(hits: list[dict], me: dict, known: set[str], seen: dict) -> tuple[list[dict], list[dict]]:
-    """Merge hits into one candidate per canonical URL. Returns (kept, skipped)."""
-    by_url: dict[str, dict] = {}
-    skipped: list[dict] = []
+def collect(hits: list[dict], me: dict, known: set[str], seen: dict) -> tuple[list[dict], list[dict]]:
+    """One capture per new canonical URL across the saved messages. Returns (captures, skipped)."""
+    captures: dict[str, dict] = {}
+    skipped: dict[str, dict] = {}
     for hit in sorted(hits, key=lambda h: h["ts"]):
-        if hit.get("bot"):
-            continue
-        place, self_dm = where(hit, me["id"])
-        for raw, label in links(hit.get("text", "")):
+        place = where(hit, me["id"])
+        poster = "you" if hit.get("fromId") == me["id"] else hit.get("from", "someone")
+        by = None if poster == "you" and place == "your own DM" else f"{poster} in {place}"
+        found = links(hit.get("text", ""))
+        for raw, label in found:
             try:
                 url = canonicalize(raw)
             except ValueError:
                 continue
+            p = urlsplit(url)
+            if len(found) > 1 and p.path == "/" and not p.query:
+                continue  # a bare domain mentioned next to the real link ("agents from x.ai") is not what was saved
             kind, reason = classify(url)
-            if kind == "drop" or url in known:
+            if kind == "drop" or url in known or url in seen or url in captures or url in skipped:
                 continue
-            poster = "you" if hit.get("fromId") == me["id"] else hit.get("from", "someone")
             if kind == "skip":
-                if url not in seen and url not in {s["url"] for s in skipped}:
-                    skipped.append({"url": url, "title": label, "reason": reason, "by": f"{poster} in {place}", "permalink": hit.get("permalink"), "at": iso(hit["ts"])})
+                skipped[url] = {"url": url, "title": label, "reason": reason, "by": by or "you", "permalink": hit.get("permalink"), "at": iso(hit["ts"])}
                 continue
-            c = by_url.get(url)
-            if not c:
-                c = by_url[url] = {"url": url, "raw": raw, "title": label, "at": iso(hit["ts"]), "permalink": hit.get("permalink"), "text": plain(hit.get("text", ""), SNIPPET),
-                                   "context": [plain(x, CONTEXT_CHARS) for x in hit.get("context", [])[:CONTEXT_LINES]], "replies": hit.get("replies", 0),
-                                   "sharers": [], "sharerIds": [], "place": place, "selfDm": self_dm, "saved": bool(hit.get("saved"))}
-            if hit.get("fromId") and hit["fromId"] not in c["sharerIds"]:
-                c["sharerIds"].append(hit["fromId"])
-                c["sharers"].append(poster)
-            c["saved"] = c["saved"] or bool(hit.get("saved"))
-            c["selfDm"] = c["selfDm"] or self_dm
-            c["title"] = c["title"] or label
-    skipped = [s for s in skipped if s["url"] not in by_url]  # the same message can come back from both searches
-    kept = []
-    for c in by_url.values():
-        prior = seen.get(c["url"])
-        if prior and not (prior.get("decision") == "rejected" and set(c["sharerIds"]) - set(prior.get("sharers", []))):
-            continue
-        c["recommendedBy"] = None if c["selfDm"] and c["sharers"] == ["you"] else f"{', '.join(c['sharers'])} in {c['place']}"
-        c["hint"] = "saved by you" if c["saved"] else "your own DM" if c["selfDm"] else None
-        kept.append(c)
-    return kept, skipped
+            captures[url] = {"url": url, "raw": raw, "title": label, "at": iso(hit["ts"]), "permalink": hit.get("permalink"),
+                             "note": plain(hit.get("text", ""), NOTE_CHARS), "recommendedBy": by}
+    return list(captures.values()), list(skipped.values())
 
 
-def cmd_sweep(args: argparse.Namespace) -> int:
+def main(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(prog="slack.py", description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter,
+                                 epilog="Exit codes: 0 ran, 2 bad arguments, 3 STATE_DIR or Slack unusable.")
+    ap.add_argument("state_dir", metavar="STATE_DIR", help="folder holding inbox/ and items/, e.g. ~/work/read-later")
+    ap.add_argument("--pages", type=int, default=5, help="pages of 20 saved messages to read, newest first (default 5)")
+    ap.add_argument("--mcp-url", default=MCP_URL, help=argparse.SUPPRESS)
+    ap.add_argument("--dry-run", action="store_true", help="search and print; write nothing")
+    ap.add_argument("--json", action="store_true", help="JSON lines on stdout instead of text")
+    args = ap.parse_args(argv)
+
     root = Path(args.state_dir).expanduser().resolve()
     if not (root / "inbox").is_dir():
         log(f"error: {root} has no inbox/ folder. Is this the read-later state dir?")
@@ -356,119 +323,40 @@ def cmd_sweep(args: argparse.Namespace) -> int:
     sdir = root / "slack"
     sdir.mkdir(exist_ok=True)
     state = load_json(sdir / "state.json", {})
-    seen: dict = state.get("seen", {})
     cutoff = (datetime.now(timezone.utc) - timedelta(days=SEEN_DAYS)).isoformat()
-    seen = {u: v for u, v in seen.items() if v.get("at", "") >= cutoff}
+    seen = {u: v for u, v in state.get("seen", {}).items() if v.get("at", "") >= cutoff}
 
-    slack = Slack(args.mcp_url)
-    me = state.get("me") or slack.me()
-    since = datetime.fromisoformat(state["lastSweepAt"].replace("Z", "+00:00")) - timedelta(days=1) if state.get("lastSweepAt") else datetime.now(timezone.utc) - timedelta(days=args.days)
-    log(f"sweeping as {me['name']} ({me['id']}): saved messages, then links after {since.date()}")
-
-    saved = slack.search("is:saved has:link", args.saved_pages)
-    for h in saved:
-        h["saved"] = True
-    recent = slack.search(f"has:link after:{since.date().isoformat()}", args.max_pages, stop_before=since.timestamp())
-    log(f"slack returned {len(saved)} saved and {len(recent)} recent messages with links")
-
-    known = known_urls(root)
-    shortlist, skipped = candidates(saved + recent, me, known, seen)
-    at = now()
-    for s in skipped:
-        seen[s["url"]] = {"decision": "skipped", "at": at, "sharers": [], "reason": s["reason"]}
-        print(json.dumps({"skipped": s["url"], "reason": s["reason"]}) if args.json else f"skipped    {s['url']}  ({s['reason']})")
-    for n, c in enumerate(shortlist, 1):
-        c["n"] = n
-    if not args.dry_run:
-        state = {"me": me, "lastSweepAt": at, "seen": seen}
-        (sdir / "state.json").write_text(json.dumps(state, indent=2, ensure_ascii=False) + "\n")
-        old = [s for s in load_json(sdir / "skipped.json", []) if isinstance(s, dict) and s.get("url") not in known and s.get("at", "") >= cutoff]
-        merged = {s["url"]: s for s in old + skipped}
-        (sdir / "skipped.json").write_text(json.dumps(list(merged.values()), indent=2, ensure_ascii=False) + "\n")
-        (sdir / "shortlist.json").write_text(json.dumps({"sweepAt": at, "candidates": shortlist}, indent=2, ensure_ascii=False) + "\n")
-    if args.json:
-        print(json.dumps({"shortlist": shortlist}, ensure_ascii=False))
-    else:
-        print(f"\nshortlist  {len(shortlist)} candidate(s) for you to judge" + (" (dry run, nothing written)" if args.dry_run else ", in slack/shortlist.json"))
-        for c in shortlist:
-            head = f"[{c['n']}] {c['url']}"
-            if c.get("title"):
-                head += f"  · {c['title']}"
-            print(head)
-            meta = f"    {c['recommendedBy'] or 'you'} · {c['at'][:10]}" + (f" · {c['replies']} replies" if c.get("replies") else "") + (f" · {c['hint'].upper()}" if c.get("hint") else "")
-            print(meta)
-            if c.get("text"):
-                print(f"    “{c['text']}”")
-            for x in c.get("context", []):
-                if x:
-                    print(f"      ↳ {x}")
-    log(f"done: {len(skipped)} skipped, {len(shortlist)} shortlisted, {len(known)} urls already known")
-    return 0
-
-
-# ---------- capture ----------
-
-def cmd_capture(args: argparse.Namespace) -> int:
-    root = Path(args.state_dir).expanduser().resolve()
-    sdir = root / "slack"
-    short = load_json(sdir / "shortlist.json", None)
-    if not short or "candidates" not in short:
-        log(f"error: {sdir / 'shortlist.json'} missing or empty. Run `sweep` first.")
-        return 3
-    cands = {str(c["n"]): c for c in short["candidates"]}
-    picks = set() if args.picks.strip().lower() in ("none", "") else {p.strip() for p in args.picks.split(",") if p.strip()}
-    if unknown := picks - set(cands):
-        log(f"error: no such candidate(s): {', '.join(sorted(unknown))}. Valid: 1-{len(cands)}")
-        return 2
-    state = load_json(sdir / "state.json", {})
-    seen = state.setdefault("seen", {})
-    at = now()
-    for n, c in cands.items():
-        if n in picks:
-            ev = event(c, "slack")
-            write_event(root, ev, args.dry_run)
-            seen[c["url"]] = {"decision": "captured", "at": at, "sharers": c["sharerIds"], "how": "slack"}
-            print(json.dumps({"captured": c["url"], "by": c["recommendedBy"]}) if args.json else f"captured   {c['url']}  ({c['recommendedBy']})")
-        else:
-            seen[c["url"]] = {"decision": "rejected", "at": at, "sharers": c["sharerIds"]}
-    if not args.dry_run:
-        (sdir / "state.json").write_text(json.dumps(state, indent=2, ensure_ascii=False) + "\n")
-        (sdir / "shortlist.json").unlink(missing_ok=True)
-    log(f"done: {len(picks)} captured, {len(cands) - len(picks)} rejected{' (dry run, nothing written)' if args.dry_run else ''}")
-    return 0
-
-
-# ---------- cli ----------
-
-def parse_args(argv: list[str]) -> argparse.Namespace:
-    ap = argparse.ArgumentParser(prog="slack.py", description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter,
-                                 epilog="Exit codes: 0 ran, 2 bad arguments, 3 STATE_DIR or Slack unusable.")
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    sw = sub.add_parser("sweep", help="search Slack; capture saved and self-DM links; print a shortlist for the agent")
-    sw.add_argument("state_dir", metavar="STATE_DIR", help="folder holding inbox/ and items/, e.g. ~/work/read-later")
-    sw.add_argument("--days", type=int, default=7, help="first-run lookback in days (default 7); later runs continue from the last sweep")
-    sw.add_argument("--max-pages", type=int, default=15, help="pages of 20 messages for the has:link search (default 15)")
-    sw.add_argument("--saved-pages", type=int, default=5, help="pages of 20 messages for the saved-messages search (default 5)")
-    sw.add_argument("--mcp-url", default=MCP_URL, help=argparse.SUPPRESS)
-    sw.add_argument("--dry-run", action="store_true", help="search and print; write nothing")
-    sw.add_argument("--json", action="store_true", help="JSON lines on stdout instead of text")
-    cp = sub.add_parser("capture", help="write inbox events for picked shortlist entries; remember the rest as rejected")
-    cp.add_argument("state_dir", metavar="STATE_DIR")
-    cp.add_argument("--picks", required=True, metavar="N,N,…|none", help="shortlist numbers to capture, or `none`")
-    cp.add_argument("--dry-run", action="store_true", help="print what would be written; write nothing")
-    cp.add_argument("--json", action="store_true", help="JSON lines on stdout instead of text")
-    return ap.parse_args(argv)
-
-
-def main(argv: list[str]) -> int:
-    args = parse_args(argv)
     try:
-        return cmd_sweep(args) if args.cmd == "sweep" else cmd_capture(args)
+        slack = Slack(args.mcp_url)
+        me = state.get("me") or slack.me()
+        hits = slack.search("is:saved has:link", args.pages)
     except SystemExit as e:
         if isinstance(e.code, str):
             log(e.code)
             return 3
         raise
+    log(f"{me['name']} ({me['id']}): {len(hits)} saved message(s) with links")
+
+    known = known_urls(root)
+    captures, skipped = collect(hits, me, known, seen)
+    at = now()
+    for c in captures:
+        ev = event(c)
+        if not args.dry_run:
+            (root / "inbox" / f"{ev['id']}.json").write_text(json.dumps(ev, ensure_ascii=False, indent=2) + "\n")
+        seen[c["url"]] = {"decision": "captured", "at": at}
+        print(json.dumps({"captured": c["url"], "by": c["recommendedBy"], "event": ev["id"]}, ensure_ascii=False) if args.json
+              else f"captured   {c['url']}" + (f"  ({c['recommendedBy']})" if c["recommendedBy"] else ""))
+    for s in skipped:
+        seen[s["url"]] = {"decision": "skipped", "at": at, "reason": s["reason"]}
+        print(json.dumps({"skipped": s["url"], "reason": s["reason"]}, ensure_ascii=False) if args.json else f"skipped    {s['url']}  ({s['reason']})")
+    if not args.dry_run:
+        (sdir / "state.json").write_text(json.dumps({"me": me, "lastSweepAt": at, "seen": seen}, indent=2, ensure_ascii=False) + "\n")
+        old = [s for s in load_json(sdir / "skipped.json", []) if isinstance(s, dict) and s.get("url") and s["url"] not in known and s.get("at", "") >= cutoff]
+        merged = {s["url"]: s for s in old + skipped}
+        (sdir / "skipped.json").write_text(json.dumps(list(merged.values()), indent=2, ensure_ascii=False) + "\n")
+    log(f"done: {len(captures)} captured, {len(skipped)} skipped, {len(hits)} saved messages seen{' (dry run, nothing written)' if args.dry_run else ''}")
+    return 0
 
 
 if __name__ == "__main__":

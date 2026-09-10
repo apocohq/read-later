@@ -23,7 +23,7 @@ Written by producers (the Chrome extension, `read-later-slack`, the agent from c
 |---|---|---|
 | `id` | yes | unique, time-sortable, also the filename |
 | `action` | no | `capture` (default); `remove` = retract earlier captures of this URL (drop if unprocessed, archive if processed); `done` = the reader finished it |
-| `source` | yes | `browser`; `chat` (the agent, on the reader's word); `slack` (the agent's pick from the sweep's shortlist); other producers add their own value |
+| `source` | yes | `browser`; `chat` (the agent, on the reader's word); `slack` (a link from a message the reader saved in Slack); other producers add their own value |
 | `url` | yes | as seen; canonicalization happens here, not in the producer |
 | `title` | no | page title |
 | `selectedText`, `note` | no | the user's own signal why it matters |
@@ -138,12 +138,11 @@ For a PDF the Markdown comes from PyMuPDF's layout analysis: headings by level, 
 
 `items/` is the live pool and the only folder `rank` reads. `read-later-prune` moves whole item folders to `done/` (status `done`) or `archive/` (status `archived`, `not-an-article`, or unread for 30 days and not must-read). Nothing is deleted.
 
-## Slack sweep state — `slack/`
+## Slack state — `slack/`
 
 Written only by `read-later-slack/scripts/slack.py`.
 
-- `state.json`: `{"me": {id, name}, "lastSweepAt": "…", "seen": {"<canonical url>": {"decision": "captured|rejected|skipped", "at": "…", "sharers": ["U…"]}}}`. `seen` keeps the sweep from asking twice; a rejected link comes back only when a new sharer appears. Entries expire after 60 days.
-- `shortlist.json`: `{"sweepAt": "…", "candidates": [{n, url, title, recommendedBy, at, text, context[], replies, permalink, sharerIds}]}`; the agent's decision input, deleted by `capture`.
+- `state.json`: `{"me": {id, name}, "lastSweepAt": "…", "seen": {"<canonical url>": {"decision": "captured|skipped", "at": "…"}}}`. `seen` is the ledger of links already handled; entries expire after 90 days (`items/` still dedupes captured URLs).
 - `skipped.json`: `[{url, title, reason, by, permalink, at}]`, links the fetch fallback cannot reach (login walls, social posts). `read-later-rank` lists them under `attention` with `kind: "slack"`.
 
 ## Reader context — `context.md`
