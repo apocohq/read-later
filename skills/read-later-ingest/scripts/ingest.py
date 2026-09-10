@@ -29,6 +29,10 @@ Events: `capture` (default) adds a page; `remove` retracts earlier captures of t
 (drops unprocessed ones, archives a processed item); `done` marks a processed item as read;
 `delete` retracts like `remove` and then removes the item folder for good, wherever prune left it
 (items/, done/ or archive/). A later capture of the same URL starts a fresh item.
+A capture of an item that is `done` reopens it. A capture with HTML of an item that already has text
+is extracted again, and the new text replaces the old when it is clearly larger (twice the words and
+at least REDO_MIN_GROWTH more) or the analyzer had judged the old text `not-an-article`; the analysis
+is then dropped so it is redone. Items with highlights are never replaced.
 
 Content: captured HTML → readability; else fetch the URL, which may be HTML or a PDF (PyMuPDF layout
 → Markdown with headings and tables, no OCR, no images); else the event's own `text`.
@@ -68,6 +72,7 @@ TRACKING = re.compile(r"^(utm_|fbclid$|gclid$|mc_|ref$|source$|si$|nd$|dlsi$)") 
 SLUG_MAX = 60
 RETRY_MAX = 3
 RETRY_AFTER_HOURS = 20
+REDO_MIN_GROWTH = 100  # words a re-capture must add (and double) to replace an item's text
 
 
 def now() -> str:
@@ -546,6 +551,23 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return ap.parse_args(argv)
 
 
+def has_highlights(folder: Path) -> bool:
+    try:
+        return bool(json.loads((folder / "highlights.json").read_text()).get("highlights"))
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
+def redo_reason(item: dict, fresh: dict) -> str | None:
+    """Why a fresh extraction should replace the item's text, or None to keep what is there."""
+    old, new = item.get("words") or 0, fresh.get("words") or 0
+    if new >= 2 * old and new - old >= REDO_MIN_GROWTH:
+        return f"{old} → {new} words"
+    if (item.get("analysis") or {}).get("contentType") == "not-an-article":
+        return "not-an-article"
+    return None
+
+
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
     root = Path(args.state_dir).expanduser().resolve()
@@ -584,6 +606,19 @@ def main(argv: list[str]) -> int:
             else:
                 item.update(status="failed", failure=f"no source yielded at least {MIN_WORDS} words", attempts=item.get("attempts", 0) + 1, failedAt=now())
                 failed += 1
+        elif any(e.get("html") for e in evs) and not has_highlights(store.items / found[0]):
+            # The item has text already and the browser sent HTML again: extract from it and keep the better of the two.
+            # Better = clearly more text (a paywalled fetch replaced by the logged-in page), or the analyzer had judged the
+            # old text not-an-article. Highlights anchor to the old text, so an item with highlights is never replaced.
+            fresh = next((c for e in reversed(evs) if e.get("html") and (c := media(e["html"], canonical) or extract(e["html"], canonical, "capture"))), None)
+            if fresh and (why := redo_reason(item, fresh)):
+                markdown = fresh.pop("markdown")
+                for k in ("analysis", "analysisError", "failure", "kind", "durationSeconds", "image"):
+                    item.pop(k, None)
+                item.update({k: v for k, v in fresh.items() if v is not None}, status="extracted")
+                store.feedback({"item": found[0], "action": "re-extract", "reason": f"{why}; captured again with HTML via {evs[-1].get('source', '?')}", "at": now()})
+                print(f"redo      items/{found[0]}  {why}", file=sys.stderr)
+                ok += 1
         folder = found[0] if found else store.new_folder(evs[0]["capturedAt"], item.get("title"), canonical)
         store.save(folder, item, markdown)
         for e in evs:
