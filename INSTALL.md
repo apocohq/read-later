@@ -8,7 +8,7 @@ The agent must exist on the **Claude Code** template and have two things only an
 
 - **A model connection.** Analysis runs in ephemeral Invocations that need exactly one model connection. Find its id with `dam connection list`, then `dam connection grant <agent> --connection <model-connection>`.
 - **Network access** for the first-run package downloads (PyPI) and for fetching pages the browser could not capture: `dam network apply-preset <agent> --preset all --yes`. The `trusted` preset also works, but then bookmarks that arrive without HTML fail unless their host is allowed; PDFs (arXiv papers, reports) are always fetched by the agent, so their hosts must be reachable.
-- **The Slack connection**, if links shared in Slack should be swept: `dam connection grant <agent> --connection slack`. It must be *your* Slack connection (`dam connection templates` → Slack, log in as yourself): the sweep searches as you, so it sees what you see, including your DMs. It only reads (two search tools, allowlisted in the script). Without the grant the refresh skips the sweep. See section D.
+- **The Slack connection**, if you want to save links from Slack: `dam connection grant <agent> --connection slack`. It must be *your* Slack connection (`dam connection templates` → Slack, log in as yourself): the script reads *your* saved messages. It only reads (two tools, allowlisted in the script). Without the grant the refresh skips this step. See section D.
 - A fresh agent, if you need one: `dam agent create <agent> --template claude-code`.
 
 The skill source must be registered once per DAM account: `dam skill source add https://github.com/apocohq/read-later` ("already registered" means it is done).
@@ -69,18 +69,18 @@ Using it: click the bookmark icon to save a page; right-click for **Read later (
 
 ## D. Slack (owner, optional)
 
-With the Slack connection granted (section 0) and `read-later-slack` installed, the daily refresh sweeps Slack before ingest. Nothing to configure.
+With the Slack connection granted (section 0) and `read-later-slack` installed, the daily refresh pulls your saved Slack messages before ingest. Nothing to configure.
 
 Using it:
 
-- Every link shared in every channel and DM you are in is judged by the agent: it captures what you would want to read and skips the rest. The refresh report lists its picks; tell the agent "also add what X posted in #channel" if it missed one, or **Remove from Read Later** in the extension if it picked wrong.
-- To make sure something gets in, use **Save for later** on the message (the bookmark icon in the message menu, on desktop or mobile) or send the link to yourself in your own DM. The agent sees both as strong signals.
+- **Save for later** on any Slack message with a link (the bookmark icon in the message menu, on desktop or mobile). The next refresh captures every link in that message, like a click on the extension. Nothing else in Slack is read.
 - Links behind a login (Google Docs, Box, internal GitHub) and social posts cannot be fetched by the agent. The library page lists them under **Needs attention**; open them and save from the browser if you want them.
-- The first sweep looks back 7 days. Later sweeps continue from the last one. Slack rate-limits search, so a sweep can take a few minutes; the script waits and retries.
+- Unsaving in Slack changes nothing. Remove items in the library or with the extension.
+- Slack rate-limits search, so the step can take a minute; the script waits and retries.
 
-By hand, in the agent's chat: *sweep slack for read later*. Then *ingest, analyze, rank and deliver read later* as usual, or the whole line from [First run by hand](#first-run-by-hand).
+By hand, in the agent's chat: *pull my saved slack messages into read later*. Then *ingest, analyze, rank and deliver read later* as usual, or the whole line from [First run by hand](#first-run-by-hand).
 
-What the agent never does: post, react, draft or schedule anything in Slack as part of this. The script refuses every Slack tool except the two searches.
+What the agent never does: post, react, draft or schedule anything in Slack as part of this. The script refuses every Slack tool except search and reading its own profile.
 
 ## Reader context
 
@@ -109,16 +109,16 @@ Two schedules, fresh session each tick. The refresh at 18:00 means everything sa
 
 | name | when | task |
 |---|---|---|
-| `read-later-refresh` | daily 18:00 | `Read-later refresh. State dir ~/work/read-later. Use the installed skills in this order, and only these: read-later-slack (sweep, judge the shortlist, capture; skip the skill if the script reports no Slack connection), read-later-ingest, read-later-analyze (pass only the model connection), read-later-rank (reweigh from context.md first), read-later-deliver. Report each script output briefly and the artifact link. Do not open articles.` |
+| `read-later-refresh` | daily 18:00 | `Read-later refresh. State dir ~/work/read-later. Use the installed skills in this order, and only these: read-later-slack (run its script; skip the skill if it reports no Slack connection), read-later-ingest, read-later-analyze (pass only the model connection), read-later-rank (reweigh from context.md first), read-later-deliver. Report each script output briefly and the artifact link. Do not open articles.` |
 | `read-later-prune` | Sundays 09:00 | `Read-later weekly prune. State dir ~/work/read-later. Use skill read-later-prune: run its script, then tidy topics.md as the skill describes. Report what moved and what changed in the vocabulary.` |
 
 ## First run by hand
 
 Once a few pages are saved, in the agent's chat:
 
-> sweep slack, ingest, analyze, rank and deliver read later
+> pull saved slack messages, ingest, analyze, rank and deliver read later
 
-Expected: the sweep captures your saved Slack messages and self-DM links, then asks itself about the rest and reports its picks; ingest reports what it extracted; analyze spawns one Invocation per item and prints category and scores; rank reweighs (or says no context) and prints the queue; deliver publishes the `Read later` artifact and replies with its link. Each Invocation takes one to three minutes and they run three at a time.
+Expected: the Slack step reports how many saved links it captured; ingest reports what it extracted; analyze spawns one Invocation per item and prints category and scores; rank reweighs (or says no context) and prints the queue; deliver publishes the `Read later` artifact and replies with its link. Each Invocation takes one to three minutes and they run three at a time.
 
 Then open `~/work/read-later/topics.md`, set a first pass of weights (0-10) for the topics you care about, and ask the agent to rank and deliver again.
 
@@ -127,7 +127,7 @@ Then open `~/work/read-later/topics.md`, set a first pass of weights (0-10) for 
 ```
 ~/work/read-later/
   inbox/            empty after each run
-  slack/            state.json (last sweep, decisions), skipped.json (links behind logins, listed on the page)
+  slack/            state.json (last run, URLs seen), skipped.json (links behind logins, listed on the page)
   items/            one folder per live article: item.json (with analysis), content.md, highlights.json when you highlighted
   done/  archive/   moved there by prune
   topics.md         categories + weighted topics
