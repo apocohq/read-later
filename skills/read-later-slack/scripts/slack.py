@@ -40,7 +40,7 @@ SEEN_DAYS = 90  # forget decisions older than this; items/ still dedupes capture
 NOTE_CHARS = 280
 
 # Same rules as read-later-ingest so both sides agree on identity.
-TRACKING = re.compile(r"^(utm_|fbclid$|gclid$|mc_|ref$|source$|si$)")
+TRACKING = re.compile(r"^(utm_|fbclid$|gclid$|mc_|ref$|source$|si$|nd$|dlsi$)")
 
 # Not reading material: dropped without a word.
 DROP = re.compile(
@@ -70,8 +70,26 @@ def log(msg: str) -> None:
     print(msg, file=sys.stderr)
 
 
+YOUTUBE_HOSTS = {"youtube.com", "m.youtube.com", "music.youtube.com", "youtube-nocookie.com"}
+
+
+def youtube_id(p) -> str | None:
+    """Same rule as read-later-ingest: one canonical URL per YouTube video, whatever the share form."""
+    host = (p.hostname or "").removeprefix("www.")
+    if host == "youtu.be":
+        vid = p.path.strip("/").split("/")[0]
+    elif host in YOUTUBE_HOSTS:
+        m = re.match(r"^/(?:shorts|embed|live|v)/([A-Za-z0-9_-]{11})", p.path)
+        vid = m.group(1) if m else dict(parse_qsl(p.query)).get("v", "")
+    else:
+        return None
+    return vid if re.fullmatch(r"[A-Za-z0-9_-]{11}", vid) else None
+
+
 def canonicalize(url: str) -> str:
     p = urlsplit(url.strip())
+    if vid := youtube_id(p):
+        return f"https://youtube.com/watch?v={vid}"
     host = p.hostname or ""
     host = host[4:] if host.startswith("www.") else host
     if p.port and not ((p.scheme == "https" and p.port == 443) or (p.scheme == "http" and p.port == 80)):

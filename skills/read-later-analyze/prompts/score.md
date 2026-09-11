@@ -14,4 +14,4 @@ Two integer scores, 0 to 10, each with `reason`: one sentence naming the evidenc
 
 Be strict. Most web writing sits between 3 and 6 on both. Reserve 9 and 10 for pieces you would cite.
 
-For a video or audio page you only see the publisher's description. Score what it shows: who speaks and from what experience (hard-won), and whether it names concrete topics and claims or just sells the episode (grounded). Do not assume depth the description does not show.
+For a video or audio page you only see the publisher's description. Score what it shows: who speaks and from what experience (hard-won), and whether it names concrete topics and claims or just sells the episode (grounded). Do not assume depth the description does not show. When the item says the text is the publisher's transcript, score the transcript as you would an article: what the speakers actually say, show and support.

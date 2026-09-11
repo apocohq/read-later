@@ -6,5 +6,6 @@
 
 `topics`: 2 to 5 labels for the subjects the text is actually about. Form: lowercase, singular, hyphenated noun phrase (`code-review`, `agent-cost`, `mcp`). Then:
 - Reuse a label from the TOPICS list in the vocabulary whenever it fits. Do not coin a near-synonym of an existing label.
-- Coin a new label only when the article's main subject has no match in the list. Make it specific enough to be useful and general enough to be reused (`token-cost`, not `uber-token-cost-2026`).
+- Coin a new label only when the article's main subject has no match in the list, and at most one per article. Make it specific enough to be useful and general enough to be reused (`token-cost`, not `uber-token-cost-2026`). Prefer the broader existing label over a narrower new one (`text-editor`, not `helix`).
+- Never coin a product, tool, company, person or place name as a label; describe the subject instead (`us-history`, not `abraham-lincoln`).
 - Never use the category name as a topic.

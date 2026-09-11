@@ -59,6 +59,11 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 .tile{background:none;border:0;padding:0;text-align:left;cursor:pointer;color:inherit;font:inherit;display:flex;flex-direction:column;gap:9px;width:100%}
 .cover{position:relative;aspect-ratio:2/3;border-radius:3px 8px 8px 3px;box-shadow:var(--shadow);overflow:hidden;color:#fff;padding:14px 14px 12px 18px;display:flex;flex-direction:column;justify-content:space-between;
   background:linear-gradient(160deg,var(--c1) 0%,var(--c2) 100%);transition:transform .18s ease,box-shadow .18s ease}
+.cover .art{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.55;filter:saturate(.85)}
+.cover.has-art{background:#2a2622}
+.cover.has-art::after{background:linear-gradient(180deg,rgba(0,0,0,.35) 0%,rgba(0,0,0,.1) 40%,rgba(0,0,0,.75) 100%);width:auto;left:0;right:0;opacity:1}
+.cover>.head,.cover>.mid,.cover>.foot{position:relative;z-index:1}
+.pane .head .mini img{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}
 .cover::before{content:"";position:absolute;left:0;top:0;bottom:0;width:7px;background:linear-gradient(90deg,rgba(0,0,0,.28),rgba(255,255,255,.08));}
 .cover::after{content:"";position:absolute;right:0;top:0;bottom:0;width:3px;background:repeating-linear-gradient(180deg,rgba(255,255,255,.5) 0 1px,rgba(0,0,0,.15) 1px 2px);opacity:.7}
 .tile:hover .cover{transform:translateY(-3px) rotate(-.4deg);box-shadow:0 2px 3px rgba(40,30,20,.14),0 18px 30px -14px rgba(40,30,20,.5)}
@@ -212,7 +217,8 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
   function tile(it){
     const b = document.createElement('button'); b.className = 'tile'; b.setAttribute('aria-label', it.title || it.url);
     b.innerHTML = `
-      <div class="cover" style="${colors(it.category)}">
+      <div class="cover${it.image ? ' has-art' : ''}" style="${colors(it.category)}">
+        ${it.image ? `<img class="art" src="${esc(it.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
         <div class="head">
           <div class="kicker"><span class="cat">${esc(it.category||'')}</span>${it.mustRead ? '<span class="pill">must</span>' : ''}</div>
           ${it.topTopic ? `<div class="topic">${esc(it.topTopic)}</div>` : ''}
@@ -252,7 +258,9 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       .replace(/\[([^\]]+)\]\(([^)\s]+)[^)]*\)/g, (m,t,u) => /^https?:\/\//.test(u) ? `<a href="${u}" target="_blank" rel="noopener">${t}</a>` : t)
       .replace(/`([^`]+)`/g, '<code>$1</code>')
       .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>')
-      .replace(/&lt;br\s*\/?&gt;/gi, '<br>').replace(/&lt;\/?mark&gt;/gi, '');  // PDF extraction leftovers in older items
+      .replace(/&lt;br\s*\/?&gt;/gi, '<br>').replace(/&lt;\/?mark&gt;/gi, '')  // PDF extraction leftovers in older items
+      .replace(/(^|[\s(:])(https?:\/\/[^\s<)]+?)([.,;:)]?)(?=\s|$|<)/g, (m, pre, u, tail) => `${pre}<a href="${u}" target="_blank" rel="noopener">${u}</a>${tail}`)  // bare URLs (media descriptions)
+      .replace(/\u0001/g, '<br>');  // hard line breaks (two trailing spaces in the Markdown: chapter lists, credits)
     // pipe tables (PDF extraction and many blogs): header row, separator row, body rows; cells may hold <br>
     const cells = r => r.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => inline(c.trim()));
     const isRow = s => /^\s*\|/.test(s || ''), isSep = s => /^\s*\|?\s*:?-{3,}/.test(s || '') && (s || '').includes('|');
@@ -275,7 +283,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       if ((m = l.match(/^\s*\d+[.)]\s+(.*)/))){ if (list!=='ol'){ flush(); list='ol'; out.push('<ol>'); } out.push('<li>'+inline(m[1])+'</li>'); continue; }
       if (/^!\[[^\]]*\]\(/.test(l.trim())){ flush(); out.push('<p>'+inline(l.trim())+'</p>'); continue; }
       if (list){ flush(); }
-      para.push(l.trim());
+      para.push(/  $/.test(raw) ? l.trim()+'\u0001' : l.trim());  // two trailing spaces = hard break; inline() turns the marker into <br>
     }
     flush(); if (code) out.push('<pre><code>'+esc(code.join('\n'))+'</code></pre>');
     return out.join('\n');
@@ -395,7 +403,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
     const sc = (k, label, cls, score, reason) => `<div class="score" data-k="${k}" role="button" tabindex="0" aria-expanded="false"><div class="n"><span>${label}<span class="chev">▾</span></span><b>${esc(score ?? '–')}</b></div><div class="bar ${cls}">${slots(score)}</div><p>${esc(reason||'')}</p></div>`;
     pane.innerHTML = `
       <div class="head">
-        <div class="mini" style="${colors(it.category)}"></div>
+        <div class="mini" style="${colors(it.category)}">${it.image ? `<img src="${esc(it.image)}" alt="" referrerpolicy="no-referrer">` : ''}</div>
         <div style="min-width:0;flex:1">
           <h2 id="r-title" class="serif">${esc(it.title||it.url)}</h2>
           <div class="meta">

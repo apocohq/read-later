@@ -71,6 +71,8 @@ def entry(root: Path, e: dict, bucket: str) -> dict:
         "minutes": e.get("minutes"),
         "kind": item.get("kind"),
         "durationSeconds": item.get("durationSeconds"),
+        "image": item.get("image") if item.get("kind") else None,  # cover art, media items only
+        "transcript": bool(item.get("transcriptWords")),
         "mustRead": bool(item.get("mustRead")),
         "category": a.get("category"),
         "contentType": a.get("contentType"),

@@ -1,7 +1,7 @@
 ---
 name: read-later-ingest
 description: Ingests the read-later inbox. Turns pages bookmarked from the Chrome extension (JSON events under ~/work/read-later/inbox) into deduplicated items with clean Markdown articles under ~/work/read-later/items. Use when asked to process or ingest the read-later inbox, or before evaluating or ranking read-later items.
-compatibility: Requires uv (ships in the DAM agent image) and network access to pypi.org on first run.
+compatibility: Requires uv (ships in the DAM agent image; its bootstrap needs tuf-repo-cdn.sigstore.dev and mise-versions.jdx.dev reachable) and network access to pypi.org on first run.
 metadata:
   version: "0.3"
 ---
@@ -21,10 +21,12 @@ with the readable text as Markdown. Nothing else reads the inbox.
 From this skill's directory:
 
 ```bash
-uv run scripts/ingest.py ~/work/read-later
+UV_CACHE_DIR=~/work/.cache/uv uv run scripts/ingest.py ~/work/read-later
 ```
 
-- The first run downloads the script's dependencies (declared inline, PEP 723) into uv's cache; PyMuPDF and its layout model make that about 150 MB. Later runs are offline and take a second, a few more per PDF.
+- Always set `UV_CACHE_DIR` as shown. The image's default cache lives under `/tmp` and is lost when the agent hibernates; `~/work` survives, so the dependencies are downloaded once instead of on every wake.
+- The first run downloads the script's dependencies (declared inline, PEP 723): about 30 MB. The first PDF adds PyMuPDF and its layout model (about 250 MB) through `scripts/pdf_to_md.py`, a subprocess; agents that never meet a PDF never download it. Later runs are offline and take a second, a few more per PDF.
+- If the command prints `mise` lines about installing uv and hangs, the agent lacks the network rules for uv's bootstrap (`tuf-repo-cdn.sigstore.dev`, `mise-versions.jdx.dev`). Report it and stop; the owner adds them with `dam network create`.
 - The script is idempotent. Run it as often as you like; an empty inbox is a no-op.
 - stdout: one line per item (`extracted` / `failed` / with `--json`, one object each). stderr: one line per dropped, merged or archived event, then a summary. Every inbox file is accounted for in one of the two.
 - Exit code 0 even when some items fail; failures are recorded on the item.
