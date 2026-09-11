@@ -8,7 +8,7 @@ metadata:
 
 # Read Later · Deliver
 
-Publishes the reader's library as one self-contained page in the artifact library: a shelf of book-like tiles (Tonight, Next, Later), each with its scores as bars; a click opens the TL;DR, claims, scores (reasons on click) and the full article text, with a highlighter. One artifact, one link, a new version each time the data changes. Nothing is published when nothing changed.
+Publishes the reader's library as one self-contained page in the artifact library: a shelf of book-like tiles (Tonight, Next, Later), each with its scores as bars. A tile carries category, topic and publisher in that order at the top, so the same fact sits at the same height on every tile, and a monochrome mark of the publisher (GitHub, YouTube, X, Spotify, Substack, Medium, LinkedIn, Hacker News, papers) or of the medium in the top right corner. Above the shelves, **Needs attention** lists what the reader must handle themselves, with one **Open all** button that opens every link in a tab: the fix is always to open the page and save it again with the extension; a click opens the TL;DR, claims, scores (reasons on click) and the full article text, with a highlighter. One artifact, one link, a new version each time the data changes. Nothing is published when nothing changed.
 
 The page is `assets/template.html` (design) plus data injected by `scripts/render.py` from `queue.json` and the items' `item.json`, `content.md` and `highlights.json`. To restyle for one reader, copy the template to `~/work/read-later/template.html` and edit; the copy wins.
 

@@ -19,7 +19,9 @@ Scoring, per item, all on a 0-10 scale:
 
 Buckets: the top 3 are "Read today", the next 4 "Read next", the rest "Later".
 Also lists what needs the reader's attention: items whose article could not be fetched
-(`status: failed`) and items whose analysis keeps failing (`analysisError`, no analysis yet).
+(`status: failed`), items whose analysis keeps failing (`analysisError`, no analysis yet) and the links
+the Slack sweep set aside. A link the reader has since saved from the browser drops off the list, and a
+fetch that used up its retries is marked `final`, so the page can say "save it again" instead of "retrying".
 Writes STATE_DIR/queue.json (the order, buckets and attention list read-later-deliver renders) and prints a short text view.
 Exit codes: 0 ran, 2 bad arguments, 3 STATE_DIR not usable.
 """
@@ -31,12 +33,16 @@ import re
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 DEFAULT_WEIGHT = 5
 LONG_READ_MINUTES = 18  # 4140 words at 230 wpm; compared exactly, not rounded
 WORDS_PER_MINUTE = 230
 NEWS_MAX_AGE_DAYS = 14
 WEIGHTS = {"relevance": 0.5, "quality": 0.5}
+RETRY_MAX = 3  # ingest.py stops fetching after this many attempts
+NOISE_PARAMS = re.compile(r"^(utm_|fbclid$|gclid$|mc_|ref$|source$|si$|nd$|dlsi$)")
+SITE_PARAMS = {"youtube.com": {"t", "start", "feature", "pp", "app"}, "x.com": {"t", "s"}, "twitter.com": {"t", "s"}}  # as in ingest.py
 
 
 def load_weights(path: Path) -> dict[str, int]:
@@ -89,13 +95,31 @@ def score(item: dict, weights: dict[str, int], today: date) -> tuple[float, dict
     return priority, {"relevance": round(relevance, 1), "quality": round(quality, 1), "topTopic": top_topic, "notes": notes}
 
 
+def same_page(url: str) -> str:
+    """A loose key for "the reader already has this one". ingest.py owns the real canonical form;
+    this only has to match a Slack link against an item the reader saved from the browser."""
+    p = urlsplit((url or "").strip())
+    host = (p.hostname or "").removeprefix("www.")
+    path = p.path.rstrip("/") or "/"
+    pairs = parse_qsl(p.query, keep_blank_values=True)
+    if host == "youtu.be":
+        host, path, pairs = "youtube.com", "/watch", [("v", path.lstrip("/"))] + [kv for kv in pairs if kv[0] != "v"]
+    elif host in ("m.youtube.com", "music.youtube.com"):
+        host = "youtube.com"
+    drop = SITE_PARAMS.get(host, set()) | ({"list", "index"} if host == "youtube.com" and path == "/watch" else set())
+    query = sorted((k, v) for k, v in pairs if not NOISE_PARAMS.match(k) and k not in drop)
+    return urlunsplit(("", host, path, urlencode(query), "")).lstrip("/")
+
+
 def attention(folder: str, item: dict) -> dict | None:
     """Why the reader should look at this item themselves, or None. Rendered at the top of the library page."""
     if item.get("status") in ("archived", "done"):
         return None
     base = {"item": f"items/{folder}", "title": item.get("title") or item.get("url"), "url": item.get("url")}
     if item.get("status") == "failed":
-        return {**base, "kind": "fetch", "reason": item.get("failure") or "could not extract the article", "attempts": item.get("attempts", 1), "at": item.get("failedAt") or item.get("extractedAt")}
+        attempts = item.get("attempts", 1)
+        return {**base, "kind": "fetch", "reason": item.get("failure") or "could not extract the article", "attempts": attempts,
+                "final": attempts >= RETRY_MAX, "at": item.get("failedAt") or item.get("extractedAt")}
     if not item.get("analysis") and isinstance(item.get("analysisError"), dict):
         return {**base, "kind": "analysis", "reason": item["analysisError"].get("message") or "analysis failed", "at": item["analysisError"].get("at")}
     return None
@@ -159,9 +183,11 @@ def main(argv: list[str]) -> int:
 
     weights = load_weights(root / "topics.md")
     today = datetime.now(timezone.utc).date()
-    ranked, skipped, needs = [], 0, []
+    ranked, skipped, needs, have = [], 0, [], set()
     for p in sorted((root / "items").glob("*/item.json")):
         item = json.loads(p.read_text())
+        if item.get("status") != "failed":
+            have.add(same_page(item.get("url")))  # the reader has the page itself; nothing to look at
         if att := attention(p.parent.name, item):
             needs.append(att)
         s = score(item, weights, today)
@@ -172,6 +198,11 @@ def main(argv: list[str]) -> int:
         ranked.append({"item": f"items/{p.parent.name}", "title": item.get("title"), "url": item["url"], "priority": round(priority, 2),
                        "minutes": minutes(item), "analysis": item["analysis"], **detail})
     needs += slack_skipped(root)
+    # Only a Slack row can be resolved this way: the reader saved the page from the browser, so it is an item now.
+    # A row about an item of our own (failed fetch, failed analysis) names that item and must stay.
+    dropped = len(needs)
+    needs = [n for n in needs if n.get("kind") != "slack" or same_page(n["url"]) not in have]
+    dropped -= len(needs)
     ranked.sort(key=lambda e: (-e["priority"], e["item"]))
     buckets = {"read_today": ranked[: args.today], "read_next": ranked[args.today : args.today + args.next_], "later": ranked[args.today + args.next_ :]}
 
@@ -187,7 +218,8 @@ def main(argv: list[str]) -> int:
              "attention": needs}
     (root / "queue.json").write_text(json.dumps(queue, indent=2, ensure_ascii=False) + "\n")
     print(json.dumps(queue, indent=2, ensure_ascii=False) if args.json else render_md(buckets, today, needs))
-    print(f"ranked {len(ranked)} item(s), skipped {skipped} (unanalyzed or outdated analysis, done, archived, not-an-article or stale news), {len(needs)} need attention", file=sys.stderr)
+    print(f"ranked {len(ranked)} item(s), skipped {skipped} (unanalyzed or outdated analysis, done, archived, not-an-article or stale news), "
+          f"{len(needs)} need attention" + (f" ({dropped} already saved)" if dropped else ""), file=sys.stderr)
     return 0
 
 

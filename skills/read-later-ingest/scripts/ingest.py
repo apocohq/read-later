@@ -22,7 +22,12 @@ Video and audio pages (Open Graph type video.* or music.*; JSON-LD VideoObject/P
 the page declares no type and no article) have no article to extract. They become items with `kind`, `durationSeconds`, `image`
 and the publisher's description as content.md, and skip the minimum-words check.
 
-Dedup key is the canonical `url` inside each item.json; there is no separate index.
+Dedup key is the canonical `url` inside each item.json; there is no separate index. Canonicalizing drops
+tracking params and per-host position/share params (YouTube `t`/`list`, X `t`/`s`), and folds `youtu.be`
+and the YouTube mobile hosts into `youtube.com/watch?v=...`.
+
+Titles are tidied (no unread counter, no trailing ` / X`, capped); a title that only names the site is
+dropped and replaced by the tab title or one derived from the text.
 
 Events: `capture` (default) adds a page; `remove` retracts earlier captures of the same URL
 (drops unprocessed ones, archives a processed item); `done` marks a processed item as read;
@@ -70,6 +75,14 @@ FETCH_TIMEOUT = 20
 FETCH_MAX = 40_000_000  # a paper with figures runs to tens of MB
 USER_AGENT = "Mozilla/5.0 (compatible; read-later/0.2)"
 TRACKING = re.compile(r"^(utm_|fbclid$|gclid$|mc_|ref$|source$|si$|nd$|dlsi$)")  # si/nd/dlsi: Spotify share and app-handoff params
+# Per-host parameters that name a position in the media or the share, not the page: the same page with and
+# without them is one item. Host-scoped, because `t` and `s` mean real things on other sites.
+SITE_PARAMS = {
+    "youtube.com": {"t", "start", "feature", "pp", "app"},
+    "x.com": {"t", "s"},
+    "twitter.com": {"t", "s"},
+}
+WATCH_PARAMS = {"list", "index"}  # part of a playlist URL's identity, noise on a watch URL
 SLUG_MAX = 60
 RETRY_MAX = 3
 RETRY_AFTER_HOURS = 20
@@ -126,9 +139,50 @@ def canonicalize(url: str) -> str:
     host = host[4:] if host.startswith("www.") else host
     if p.port and not ((p.scheme == "https" and p.port == 443) or (p.scheme == "http" and p.port == 80)):
         host = f"{host}:{p.port}"
-    query = sorted((k, v) for k, v in parse_qsl(p.query, keep_blank_values=True) if not TRACKING.match(k))
     path = p.path.rstrip("/") or "/"
+    pairs = parse_qsl(p.query, keep_blank_values=True)
+    if host == "youtu.be":  # a share link for a video: the same item as its watch URL
+        host, path, pairs = "youtube.com", "/watch", [("v", path.lstrip("/"))] + [kv for kv in pairs if kv[0] != "v"]
+    elif host in ("m.youtube.com", "music.youtube.com"):  # same page, one item; the path still says which page
+        host = "youtube.com"
+    drop = SITE_PARAMS.get(host, set()) | (WATCH_PARAMS if host == "youtube.com" and path == "/watch" else set())
+    query = sorted((k, v) for k, v in pairs if not TRACKING.match(k) and k not in drop)
     return urlunsplit((p.scheme.lower(), host, path, urlencode(query), ""))
+
+
+UNREAD_COUNT = re.compile(r"^\(\d+\)\s*")  # X, Gmail and others put an unread counter in the tab title
+X_SUFFIX = re.compile(r"\s*[/|]\s*(X|Twitter)\s*$", re.I)
+TITLE_MAX = 140
+# Tab titles that name the site, not the page. X gives "(1) X" for an article you are logged in to read.
+PLACEHOLDER_TITLES = {"x", "twitter", "home", "post", "youtube", "spotify", "github", "linkedin", "reddit", "loading"}
+
+
+def tidy_title(value: str | None) -> str | None:
+    """A tab title, cleaned: no unread counter, no trailing site name, one line, not too long.
+    Returns None when nothing useful is left, so a caller can fall back to a better source."""
+    if not value:
+        return None
+    t = re.sub(r"\s+", " ", X_SUFFIX.sub("", UNREAD_COUNT.sub("", value)).strip())
+    if t.lower().strip(" .!") in PLACEHOLDER_TITLES:
+        return None
+    if len(t) > TITLE_MAX:
+        t = t[:TITLE_MAX].rsplit(" ", 1)[0].rstrip(" ,;:-–—") + "\u2026"
+    return t or None
+
+
+def derived_title(url: str, markdown: str | None, author: str | None) -> str | None:
+    """When the page's own title says nothing (x.com articles): its first heading, else who posted and the first sentence."""
+    body = (markdown or "").strip()
+    if head := re.search(r"^#{1,3}\s+(.+)$", body, re.M):
+        if t := tidy_title(head.group(1)):
+            return t
+    host = (urlsplit(url).hostname or "").removeprefix("www.")
+    if host in ("x.com", "twitter.com"):
+        handle = urlsplit(url).path.lstrip("/").split("/")[0]
+        who = author or (f"@{handle}" if handle else "Someone")
+        lead = re.split(r"(?<=[.!?])\s", re.sub(r"\s+", " ", re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", body)).strip())[0]
+        return tidy_title(f"{who} on X: {lead}" if lead else f"{who} on X")
+    return None
 
 
 def slugify(text: str) -> str:
@@ -159,7 +213,7 @@ def extract(html: str, url: str, extracted_by: str) -> dict | None:
     if words < MIN_WORDS:
         return None
     meta = trafilatura.extract_metadata(html, default_url=url)
-    title = (meta.title if meta and meta.title else None) or doc.short_title() or None
+    title = tidy_title((meta.title if meta and meta.title else None) or doc.short_title())
     return {
         "title": title,
         "author": declared_author(html) or clean_author(meta.author if meta else None),
@@ -423,7 +477,7 @@ def media(html: str, url: str) -> dict | None:
     published = first(*meta("music:release_date", "uploadDate", "datePublished", "video:release_date", "article:published_time"),
                       *[text(n.get("datePublished") or n.get("uploadDate")) for n in ld])
     return {
-        "title": first(*meta("og:title"), *[text(n.get("name")) for n in ld], *[t.strip() for t in tree.xpath("//title/text()")]),
+        "title": tidy_title(first(*meta("og:title"), *[text(n.get("name")) for n in ld], *[t.strip() for t in tree.xpath("//title/text()")])),
         "author": first(*tree.xpath('//*[@itemprop="author"]//*[@itemprop="name"]/@content'), *series, declared_author(html), spotify and spotify.group(1)),
         "published": published[:10] if published and re.match(r"\d{4}-\d{2}-\d{2}", published) else None,
         "kind": kind,
@@ -604,7 +658,7 @@ class Store:
 
 
 def first_title(evs: list[dict]) -> str | None:
-    return next((e["title"] for e in evs if e.get("title")), None)
+    return next((t for e in evs if (t := tidy_title(e.get("title")))), None)
 
 
 def capture_record(ev: dict) -> dict:
@@ -706,6 +760,17 @@ def redo_reason(item: dict, fresh: dict) -> str | None:
     return None
 
 
+def stored_markdown(store: "Store", found: tuple[str, dict] | None) -> str | None:
+    path = store.items / found[0] / "content.md" if found else None
+    return path.read_text() if path and path.exists() else None
+
+
+def settle_title(item: dict, evs: list[dict], markdown: str | None) -> str | None:
+    """The best title we have: the page's own, else the browser tab's, else one derived from the text.
+    A stored placeholder ('(1) X') loses to any of them, so an old item improves on the next capture."""
+    return tidy_title(item.get("title")) or first_title(evs) or derived_title(item["url"], markdown, item.get("author")) or item.get("title")
+
+
 def process(store: Store, canonical: str, evs: list[dict], args: argparse.Namespace, ok: int, failed: int) -> tuple[int, int]:
     """One URL's captures → one item folder; deletes the inbox files it consumed. Raises on a bad page so main() can report it and move on."""
     found = store.get(canonical)
@@ -724,7 +789,6 @@ def process(store: Store, canonical: str, evs: list[dict], args: argparse.Namesp
         if content := acquire(canonical, evs):
             markdown = content.pop("markdown")
             item.update({k: v for k, v in content.items() if v is not None}, status="extracted")
-            item["title"] = item.get("title") or first_title(evs)
             item.pop("failure", None)
             ok += 1
         else:
@@ -744,6 +808,7 @@ def process(store: Store, canonical: str, evs: list[dict], args: argparse.Namesp
             store.feedback({"item": found[0], "action": "re-extract", "reason": f"{why}; captured again with HTML via {evs[-1].get('source', '?')}", "at": now()})
             print(f"redo      items/{found[0]}  {why}", file=sys.stderr)
             ok += 1
+    item["title"] = settle_title(item, evs, markdown if markdown is not None else stored_markdown(store, found))
     folder = found[0] if found else store.new_folder(evs[0]["capturedAt"], item.get("title"), canonical)
     store.save(folder, item, markdown)
     for e in evs:
@@ -798,7 +863,7 @@ def retry_failed(store: Store, as_json: bool) -> int:
         if content := fetch_and_extract(item["url"]):
             markdown = content.pop("markdown")
             item.update({k: v for k, v in content.items() if v is not None}, status="extracted")
-            item["title"] = item.get("title") or content.get("title")
+            item["title"] = settle_title(item, [], markdown)
             for k in ("failure", "attempts", "failedAt"):
                 item.pop(k, None)
             store.save(folder, item, markdown)

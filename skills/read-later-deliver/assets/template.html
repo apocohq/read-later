@@ -38,6 +38,7 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 .attention{border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line));border-left:4px solid var(--accent);border-radius:8px;padding:12px 16px;margin:0 0 8px;display:grid;gap:8px;background:color-mix(in srgb,var(--accent) 6%,var(--paper))}
 .attention h2{margin:0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);display:flex;gap:10px;align-items:baseline}
 .attention h2 small{letter-spacing:0;text-transform:none;color:var(--ink3);font-weight:400}
+.attention h2 .chip{margin-left:auto;letter-spacing:0;text-transform:none;color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
 .attention ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
 .attention li{font-size:13.5px;line-height:1.45;display:flex;gap:6px 0;flex-wrap:wrap;align-items:baseline}
 .attention li>*+*::before{content:"";display:inline-block;width:1px;height:11px;background:var(--line);margin:0 10px;vertical-align:-1px}
@@ -67,16 +68,18 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 .cover::before{content:"";position:absolute;left:0;top:0;bottom:0;width:7px;background:linear-gradient(90deg,rgba(0,0,0,.28),rgba(255,255,255,.08));}
 .cover::after{content:"";position:absolute;right:0;top:0;bottom:0;width:3px;background:repeating-linear-gradient(180deg,rgba(255,255,255,.5) 0 1px,rgba(0,0,0,.15) 1px 2px);opacity:.7}
 .tile:hover .cover{transform:translateY(-3px) rotate(-.4deg);box-shadow:0 2px 3px rgba(40,30,20,.14),0 18px 30px -14px rgba(40,30,20,.5)}
-.cover .head{display:grid;gap:5px;min-width:0}
+.cover .head{display:grid;gap:4px;min-width:0}
 .cover .kicker{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;opacity:.92;display:flex;justify-content:space-between;align-items:center;gap:6px;min-width:0}
 .cover .topic{font-size:13px;letter-spacing:.01em;opacity:.78;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
 .cover .kicker .cat{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cover .kicker .pill{flex:none;background:#f2c14e;color:#222;border-radius:3px;padding:1px 6px;letter-spacing:.08em;font-weight:700}
+.cover .marks{flex:none;display:flex;align-items:center;gap:7px}
+.cover .icon{width:17px;height:17px;display:block;fill:currentColor;opacity:.9;filter:drop-shadow(0 1px 1px rgba(0,0,0,.3))}
 .cover .badge{flex:none;font-size:16px;font-weight:700;letter-spacing:0;text-transform:none;font-variant-numeric:tabular-nums;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.22);border-radius:6px;padding:3px 8px;line-height:1.2}
-.cover .title{font-size:19px;line-height:1.22;font-weight:600;text-wrap:balance;text-shadow:0 1px 2px rgba(0,0,0,.25);display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
+.cover .title{font-size:19px;line-height:1.22;font-weight:600;text-wrap:balance;overflow-wrap:anywhere;text-shadow:0 1px 2px rgba(0,0,0,.25);display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
 .cover .foot{font-size:11px;opacity:.95;display:flex;justify-content:space-between;align-items:flex-end;gap:6px}
 .cover .mid{min-width:0}
-.cover .src{font-size:16px;line-height:1.2;font-weight:500;opacity:.85;margin-bottom:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.25)}
+.cover .src{font-size:15px;line-height:1.2;font-weight:500;opacity:.85;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.25)}
 .under{display:flex;flex-direction:column;gap:6px;padding:0 2px}
 .bars{display:grid;grid-template-columns:auto 1fr auto;gap:4px 8px;align-items:center;font-size:10.5px;color:var(--ink3)}
 .bars .v{font-variant-numeric:tabular-nums;color:var(--ink2);min-width:1.6em;text-align:right}
@@ -195,6 +198,28 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
   const HUES = {'ai-and-agents':[262,48],'engineering':[204,42],'product':[338,40],'business-and-strategy':[28,55],'leadership':[150,30],'research':[190,35],'news':[0,45],'personal':[95,30],'other':[220,10]};
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const domain = u => { try { return new URL(u).hostname.replace(/^www\./,''); } catch { return u; } };
+
+  // one monochrome mark per known publisher, drawn inline: the page cannot load an image from anywhere else
+  const ICONS = {
+    github: '<path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>',
+    youtube: '<path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>',
+    x: '<path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>',
+    spotify: '<path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.601.301.98zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>',
+    substack: '<path d="M21 3H3v2.6h18V3zm0 4.8H3V24l9-5.04L21 24V7.8zM3 10.6h18v2.6H3v-2.6z"/>',
+    medium: '<ellipse cx="6.6" cy="12" rx="6.6" ry="7"/><ellipse cx="17.2" cy="12" rx="2.9" ry="6.4"/><ellipse cx="22.6" cy="12" rx="1.2" ry="5.6"/>',
+    hn: '<path d="M2 2h20v20H2z" opacity=".9"/><path d="M12 12.6 8.2 6h2.2L12 9.6 13.6 6h2.2L12 12.6z" fill="#000" opacity=".85"/><path d="M11.1 12h1.8v6h-1.8z" fill="#000" opacity=".85"/>',
+    linkedin: '<path d="M3 3h18v18H3z" opacity=".9"/><path d="M6.3 9.6h2.1V18H6.3zM7.35 6a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5zM10.4 9.6h2v1.15c.35-.62 1.2-1.3 2.5-1.3 2.1 0 2.7 1.3 2.7 3.4V18h-2.1v-4.6c0-1.1-.4-1.8-1.4-1.8s-1.6.7-1.6 1.8V18h-2.1z" fill="#000" opacity=".85"/>',
+    paper: '<path d="M6 2h8l4 4v16H6z" opacity=".25"/><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm0 2.5L17.5 8H14V4.5zM7.5 12h9v1.6h-9zm0 3.4h9V17h-9zm0-6.8h4V10h-4z"/>',
+    video: '<path d="M2.5 4.5h19a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5h-19A1.5 1.5 0 0 1 1 18V6a1.5 1.5 0 0 1 1.5-1.5zM10 8.4v7.2l6-3.6-6-3.6z"/>',
+    audio: '<path d="M12 2a3.5 3.5 0 0 1 3.5 3.5v6a3.5 3.5 0 0 1-7 0v-6A3.5 3.5 0 0 1 12 2zM5.5 11h1.8a4.7 4.7 0 0 0 9.4 0h1.8a6.5 6.5 0 0 1-5.6 6.4V21h2.6v1.8H8.5V21h2.6v-3.6A6.5 6.5 0 0 1 5.5 11z"/>',
+    page: '<path d="M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm2.5 3.5v2h11v-2zm0 4.2v1.8h11v-1.8zm0 3.8v1.8h11V14.5zm0 3.8v1.8h7v-1.8z"/>',
+  };
+  const SITES = [[/(^|\.)github\.com$/,'github'],[/(^|\.)(youtube\.com|youtu\.be)$/,'youtube'],[/(^|\.)(x\.com|twitter\.com)$/,'x'],
+    [/(^|\.)spotify\.com$/,'spotify'],[/(^|\.)substack\.com$/,'substack'],[/(^|\.)medium\.com$/,'medium'],
+    [/(^|\.)ycombinator\.com$/,'hn'],[/(^|\.)linkedin\.com$/,'linkedin'],[/(^|\.)(arxiv\.org|acm\.org|ieee\.org|nature\.com)$/,'paper']];
+  // the publisher's mark when we know it, else what the item is; an ordinary article on an unknown site gets none
+  const iconKey = it => (SITES.find(([re]) => re.test(domain(it.url))) || [])[1] || (it.kind === 'video' ? 'video' : it.kind === 'audio' ? 'audio' : null);
+  const icon = it => { const k = iconKey(it); return k ? `<svg class="icon" viewBox="0 0 24 24" role="img" aria-label="${esc(domain(it.url))}">${ICONS[k]}</svg>` : ''; };
   const colors = cat => { const [h,s] = HUES[cat] || HUES.other; return `--c1:hsl(${h} ${s}% 34%);--c2:hsl(${(h+18)%360} ${Math.max(20,s-10)}% 22%)`; };
   const slots = v => { const n = Math.round(Math.max(0, Math.min(10, Number(v)||0))); return Array.from({length:10}, (_,i) => `<i class="${i < n ? 'on' : ''}"></i>`).join(''); };
   const num = v => v == null ? '–' : (Number.isInteger(Number(v)) ? String(v) : Number(v).toFixed(1));
@@ -207,10 +232,18 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
   (function(){
     const needs = DATA.attention || [], box = document.getElementById('attention');
     if (!needs.length) return;
-    const why = n => n.kind === 'fetch' ? `could not fetch the article${n.attempts > 1 ? ` (${n.attempts} attempts)` : ''}` : n.kind === 'slack' ? `shared by ${n.by || 'someone'} on Slack; ${n.reason || 'cannot fetch'}` : `analysis failed: ${n.reason || ''}`;
-    box.innerHTML = `<h2>Needs attention <small>${needs.length}</small></h2><ul>${needs.map(n => `<li><span class="t">${esc(n.title||n.url)}</span><span>${esc(domain(n.url))}</span><span class="why">${esc(why(n))}</span><a href="${esc(n.url)}" target="_blank" rel="noopener">Open original ↗</a>${n.sourceRef ? `<a href="${esc(n.sourceRef)}" target="_blank" rel="noopener">Slack ↗</a>` : ''}</li>`).join('')}</ul>` +
-      (needs.some(n => n.kind === 'fetch') ? '<p class="hint">Could not fetch: open the page, let it load fully, and save it again from the browser; or archive it.</p>' : '') +
-      (needs.some(n => n.kind === 'slack') ? '<p class="hint">From Slack but behind a login or on a social site: open it and save it from the browser if you want it.</p>' : '');
+    const why = n => n.kind === 'fetch' ? (n.final ? `could not fetch it in ${n.attempts} tries; no more retries` : `could not fetch the article${n.attempts > 1 ? ` (${n.attempts} attempts)` : ''}`)
+      : n.kind === 'slack' ? `shared by ${n.by || 'someone'} on Slack; ${n.reason || 'cannot fetch'}` : `analysis failed: ${n.reason || ''}`;
+    box.innerHTML = `<h2>Needs attention <small>${needs.length}</small><button type="button" class="chip" id="open-all">Open all ↗</button></h2>` +
+      `<ul>${needs.map(n => `<li><span class="t">${esc(n.title||n.url)}</span><span>${esc(domain(n.url))}</span><span class="why">${esc(why(n))}</span><a href="${esc(n.url)}" target="_blank" rel="noopener">Open original ↗</a>${n.sourceRef ? `<a href="${esc(n.sourceRef)}" target="_blank" rel="noopener">Slack ↗</a>` : ''}</li>`).join('')}</ul>` +
+      '<p class="hint">The fix for every line: open it, let it load, then save it again with the extension. The next run replaces the line with a real item. Nothing to save? Archive it from the browser.</p>' +
+      '<p class="hint" id="popup-blocked" hidden>Your browser blocked the tabs. Open the links one by one, or allow pop-ups for this page.</p>';
+    // one gesture, one tab per link: the reader's loop is open → save again with the extension
+    document.getElementById('open-all').addEventListener('click', () => {
+      // no 'noopener' feature: with it every browser returns null and we could not tell a blocked tab from an open one
+      const blocked = needs.map(n => { const w = window.open(n.url, '_blank'); if (w) w.opener = null; return w; }).some(w => !w);
+      document.getElementById('popup-blocked').hidden = !blocked;
+    });
     box.hidden = false;
   })();
 
@@ -220,10 +253,11 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       <div class="cover${it.image ? ' has-art' : ''}" style="${colors(it.category)}">
         ${it.image ? `<img class="art" src="${esc(it.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
         <div class="head">
-          <div class="kicker"><span class="cat">${esc(it.category||'')}</span>${it.mustRead ? '<span class="pill">must</span>' : ''}</div>
+          <div class="kicker"><span class="cat">${esc(it.category||'')}</span><span class="marks">${it.mustRead ? '<span class="pill">must</span>' : ''}${icon(it)}</span></div>
           ${it.topTopic ? `<div class="topic">${esc(it.topTopic)}</div>` : ''}
+          <div class="src serif">${esc(domain(it.url))}</div>
         </div>
-        <div class="mid"><div class="src serif">${esc(domain(it.url))}${it.via && it.via.by ? ' · via Slack' : ''}</div><div class="title serif">${esc(it.title||it.url)}</div></div>
+        <div class="mid"><div class="title serif">${esc(it.title||it.url)}</div></div>
         <div class="foot"><span>${it.kind ? esc(it.kind)+' · ' : ''}${esc(it.minutes)} min${HL.current(it).length ? ' · '+HL.current(it).length+' ✎' : ''}</span><span class="badge" title="Overall score: half relevance, half quality; long reads lose a point, must-read gains three">${score10(it.priority)}</span></div>
       </div>
       <div class="under">
