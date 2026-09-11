@@ -117,6 +117,16 @@ Downstream: analyze knows the text is a description (`contentType` `video`/`podc
 
 **Tested locally:** a headless-Chrome DOM of a YouTube video and of a Spotify episode, plus a fetched Wikipedia article, in one inbox: video (3Blue1Brown, 2017-10-05, 1120 s, 480-word description), podcast (Lex Fridman Podcast, 2026-02-12, 12318 s, 271 words), article via readability as before; rank and render carry kind and minutes through.
 
+## Step 8 · Cheaper refreshes, better media items  ✅ built
+
+A review on a fresh agent (2026-09-10/11) found where a refresh loses time and where video and podcast items fall short. Fixed:
+
+- **uv bootstrap.** The image's lazy `uv` shim installs uv through mise, which verifies GitHub attestations via `tuf-repo-cdn.sigstore.dev`; outside the `trusted` preset that host is blocked and the shim loops for good (an ingest hung 25 minutes). INSTALL.md now lists the two hosts. The run command sets `UV_CACHE_DIR=~/work/.cache/uv`, because the default cache under `/tmp` is lost on every hibernation (measured: 199 s and 316 MB per wake). PyMuPDF moved out of the script's dependencies into `pdf_to_md.py`, a subprocess run on the first PDF only; agents without PDFs download about 30 MB instead of 316.
+- **Analyze on a bad day.** After three Invocation failures in a row with no success, `analyze.mjs` stops spawning and prints `model connection unavailable`; the skill tells the agent to report that line and move on, not to diagnose the platform (guido once spent 51 minutes and 72 steps on exactly that). A version bump redoes old analyses only for the kinds it changed (`REDO_KINDS`), so a prompt tweak for audio items does not re-judge thirty articles.
+- **Media descriptions.** Spotify's meta tags hold one run-on string; ingest now restores line breaks (sentence ends, chapter timestamps, ALL-CAPS headings, URLs glued to the next sentence), cuts the trailer blocks (sponsors, social, episode links) into `item.json.links`, and keeps chapter lines as hard breaks so the page shows them as lines. When the description links a transcript on the publisher's site, ingest fetches it into `transcript.md` and the analyzer judges that instead of the blurb. The cover image reaches the page: media tiles and the reader header show it.
+- **Topics.** The categorize prompt caps coinage at one new label per article and forbids product, person and place names; four test items had coined twelve labels (`helix`, `vim`, `abraham-lincoln`).
+- **YouTube.** `youtu.be/ID`, `m.youtube.com`, `shorts/ID`, `&t=`, `&list=` all canonicalize to `https://youtube.com/watch?v=ID`; the same rule in `slack.py`.
+
 ## Where things stand
 
 - Steps 1-7 work end to end on two agents: `first-reader` (your bookmarks) and `read-later-test` (the INSTALL.md rehearsal). Both run `read-later-refresh` at 18:00 Prague and `read-later-prune` on Sundays.

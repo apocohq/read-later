@@ -4,7 +4,6 @@
 #   "readability-lxml>=0.8,<1",
 #   "lxml_html_clean>=0.4",
 #   "markdownify>=1.1,<2",
-#   "pymupdf4llm>=1.28,<2",
 #   "trafilatura>=2.0,<3",
 # ]
 # ///
@@ -35,7 +34,8 @@ at least REDO_MIN_GROWTH more) or the analyzer had judged the old text `not-an-a
 is then dropped so it is redone. Items with highlights are never replaced.
 
 Content: captured HTML → readability; else fetch the URL, which may be HTML or a PDF (PyMuPDF layout
-→ Markdown with headings and tables, no OCR, no images); else the event's own `text`.
+→ Markdown with headings and tables, no OCR, no images; PyMuPDF is installed on first use by
+`pdf_to_md.py`, a subprocess, so agents that never meet a PDF never download it); else the event's own `text`.
 
 Failed extractions are retried on later runs by fetching the URL again: at most RETRY_MAX
 attempts, at least RETRY_AFTER_HOURS apart, recorded as `attempts` and `failedAt` on the item.
@@ -52,6 +52,7 @@ import argparse
 import json
 import re
 import shutil
+import subprocess
 import sys
 import unicodedata
 import urllib.request
@@ -72,6 +73,7 @@ TRACKING = re.compile(r"^(utm_|fbclid$|gclid$|mc_|ref$|source$|si$|nd$|dlsi$)") 
 SLUG_MAX = 60
 RETRY_MAX = 3
 RETRY_AFTER_HOURS = 20
+PDF_TIMEOUT = 900  # the first PDF also installs PyMuPDF (about 250 MB)
 REDO_MIN_GROWTH = 100  # words a re-capture must add (and double) to replace an item's text
 
 
@@ -99,8 +101,27 @@ def load_events(inbox: Path) -> list[dict]:
     return events
 
 
+YOUTUBE_HOSTS = {"youtube.com", "m.youtube.com", "music.youtube.com", "youtube-nocookie.com"}
+YOUTUBE_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
+
+
+def youtube_id(p) -> str | None:
+    """The 11-character video id from any YouTube URL shape, or None: youtu.be/ID, watch?v=ID, shorts/ID, embed/ID, live/ID."""
+    host = (p.hostname or "").removeprefix("www.")
+    if host == "youtu.be":
+        vid = p.path.strip("/").split("/")[0]
+    elif host in YOUTUBE_HOSTS:
+        m = re.match(r"^/(?:shorts|embed|live|v)/([A-Za-z0-9_-]{11})", p.path)
+        vid = m.group(1) if m else dict(parse_qsl(p.query)).get("v", "")
+    else:
+        return None
+    return vid if YOUTUBE_ID.match(vid) else None
+
+
 def canonicalize(url: str) -> str:
     p = urlsplit(url.strip())
+    if vid := youtube_id(p):
+        return f"https://youtube.com/watch?v={vid}"  # the timestamp, playlist and share parameters are the same video
     host = p.hostname or ""
     host = host[4:] if host.startswith("www.") else host
     if p.port and not ((p.scheme == "https" and p.port == 443) or (p.scheme == "http" and p.port == 80)):
@@ -198,14 +219,16 @@ LANDING_PAGES = [(re.compile(r"^https?://arxiv\.org/pdf/([\w.\-/]+?)(?:v\d+)?(?:
 def extract_pdf(data: bytes, extracted_by: str) -> dict | None:
     """Markdown via pymupdf4llm: headings and paragraphs from PyMuPDF's layout model, tables as pipe tables.
 
-    Deterministic and offline: OCR off, images dropped, running heads and page numbers removed.
+    Runs `pdf_to_md.py` with `uv run` in a subprocess: PyMuPDF and its layout model are about 250 MB and
+    only PDFs pay for them. Deterministic and offline: OCR off, images dropped, running heads and page numbers removed.
     """
+    helper = Path(__file__).resolve().with_name("pdf_to_md.py")
     try:
-        import pymupdf  # noqa: PLC0415  heavy import (onnxruntime); only PDFs pay for it
-        import pymupdf4llm  # noqa: PLC0415
-
-        doc = pymupdf.open(stream=data, filetype="pdf")
-        md = pymupdf4llm.to_markdown(doc, use_ocr=False, header=False, footer=False, show_progress=False)
+        run = subprocess.run(["uv", "run", "--quiet", str(helper)], input=data, capture_output=True, timeout=PDF_TIMEOUT, check=False)
+        if run.returncode != 0:
+            raise RuntimeError(run.stderr.decode(errors="replace").strip().splitlines()[-1] if run.stderr.strip() else f"exit {run.returncode}")
+        out = json.loads(run.stdout)
+        md, meta, pages = out["markdown"], out.get("metadata") or {}, out.get("pages")
     except Exception as e:  # noqa: BLE001
         print(f"pdf extraction failed: {e}", file=sys.stderr)
         return None
@@ -219,7 +242,6 @@ def extract_pdf(data: bytes, extracted_by: str) -> dict | None:
     words = len(md.split())
     if words < MIN_WORDS:
         return None
-    meta = doc.metadata or {}
     first_heading = re.search(r"^# (.+)$", md, re.M)
     created = PDF_DATE.match(meta.get("creationDate") or "")
     return {
@@ -228,7 +250,7 @@ def extract_pdf(data: bytes, extracted_by: str) -> dict | None:
         "published": "-".join(created.groups()) if created else None,
         "words": words,
         "images": 0,
-        "pages": doc.page_count,
+        "pages": pages,
         "extractedBy": extracted_by,
         "extractedAt": now(),
         "markdown": md,
@@ -394,6 +416,9 @@ def media(html: str, url: str) -> dict | None:
     description = max((d for d in descriptions if d), key=len, default="")
     spotify = re.match(r"Listen to this episode from (.+?) on Spotify\.\s*", description)  # the show name is in that sentence
     description = description[spotify.end():].strip() if spotify else description
+    description = break_lines(description)
+    all_links = BARE_URL.findall(description)
+    description, links = clean_description(description)
     series = [text(n["partOfSeries"].get("name")) for n in ld if isinstance(n.get("partOfSeries"), dict)]
     published = first(*meta("music:release_date", "uploadDate", "datePublished", "video:release_date", "article:published_time"),
                       *[text(n.get("datePublished") or n.get("uploadDate")) for n in ld])
@@ -404,6 +429,8 @@ def media(html: str, url: str) -> dict | None:
         "kind": kind,
         "durationSeconds": first(*(parse_duration(v) for v in meta("music:duration", "duration", "og:video:duration", "video:duration") + [n.get("duration") for n in ld])),
         "image": first(*meta("og:image")),
+        "links": links or None,
+        "transcriptUrl": transcript_url(all_links),
         "words": len(description.split()),
         "images": 0,
         "extractedBy": "metadata",
@@ -412,12 +439,96 @@ def media(html: str, url: str) -> dict | None:
     }
 
 
+# A description's trailer: sponsor pitches, link lists, social handles. Kept on the item as `links`, out of the text the
+# reader and the analyzer see. The outline (chapter timestamps) stays.
+HEADING_WORDS = r"(?:OUTLINE|TIMESTAMPS?|CHAPTERS?|SPONSORS?|PODCAST LINKS?|SOCIAL LINKS?|EPISODE LINKS?|CONTACT [A-Z]+|CREDITS|SUPPORT [A-Z ]+|SUBSCRIBE|MERCH(?:ANDISE)?|FOLLOW [A-Z ]+)"
+TRAILER_HEADINGS = re.compile(r"(?im)^(?:sponsors?|podcast links?|social links?|contact \w+|episode links?|links?|follow (?:us|me)|credits|support (?:the|this) (?:show|podcast)|subscribe|merch(?:andise)?)\s*:")
+OUTLINE_HEADING = re.compile(r"(?im)^(?:outline|timestamps?|chapters?)\s*:")
+NOISE_LINE = re.compile(r"(?i)^(?:thank you for listening|thanks for listening|check out our sponsors|see below for timestamps|please (?:support|subscribe|rate)|subscribe (?:to|for)|follow (?:us|me))")
+TIMESTAMP = re.compile(r"\(?\b\d{1,2}:\d{2}(?::\d{2})?\)?")
+BARE_URL = re.compile(r"https?://[^\s<>()\"']+")
+
+
+def split_glued_url(m: re.Match) -> str:
+    """`https://x.com/pageNext sentence` → the URL, a newline, the sentence: a lowercase letter followed by Capital+lowercase
+    inside a URL's last path segment is where the publisher's line break was lost."""
+    url = m.group(0)
+    tail = url.rfind("/") + 1
+    if cut := re.search(r"[a-z0-9](?=[A-Z][a-z])", url[tail:]):
+        i = tail + cut.end()
+        return url[:i] + "\n" + url[i:]
+    return url
+
+
+def break_lines(text: str) -> str:
+    """Restore line structure to a description that lost its newlines (Spotify's meta tags hold one run-on string).
+
+    Breaks before an ALL-CAPS heading such as `SPONSORS:`, before a capital letter that follows a sentence end with no
+    space, before each chapter timestamp, and where a URL runs straight into the next sentence. Text that already has
+    newlines is left alone.
+    """
+    if "\n" in text:
+        return text
+    text = re.sub(r"(?<!^)(?<![A-Z] )(?=" + HEADING_WORDS + r":)", "\n", text)  # not inside a multi-word heading
+    text = re.sub(r"(?<=[.!?])(?=[A-Z])", "\n", text)
+    text = re.sub(r"(?<=\S)(?=\(\d{1,2}:\d{2}(?::\d{2})?\) )", "\n", text)
+    text = BARE_URL.sub(split_glued_url, text)
+    return text
+
+
+def clean_description(text: str) -> tuple[str, list[str]]:
+    """(description for the reader and the analyzer, links from the trailer blocks)."""
+    lines = [l.rstrip() for l in text.split("\n")]
+    keep, trailer, in_trailer = [], [], False
+    for line in lines:
+        if OUTLINE_HEADING.match(line) or TIMESTAMP.match(line.strip()):
+            in_trailer = False
+        elif TRAILER_HEADINGS.match(line):
+            in_trailer = True
+        if NOISE_LINE.match(line.strip()):
+            trailer.append(line)
+            continue
+        (trailer if in_trailer else keep).append(line)
+    links = list(dict.fromkeys(BARE_URL.findall("\n".join(trailer))))
+    body = "\n".join(keep).strip()
+    body = re.sub(r"\n{3,}", "\n\n", body)
+    body = re.sub(r"(?<!\n)\n(?!\n)", "  \n", body)  # single newlines are meaningful here (chapters, credits): hard breaks in Markdown
+    return body, links
+
+
+def transcript_url(links: list[str]) -> str | None:
+    """A transcript the publisher links from the description, on the publisher's own site (never the platform's)."""
+    for link in links:
+        host = (urlsplit(link).hostname or "").removeprefix("www.")
+        if "transcript" in link.lower() and host and host not in YOUTUBE_HOSTS | {"youtu.be", "open.spotify.com"}:
+            return link.rstrip(".,;:")
+    return None
+
+
+def attach_transcript(content: dict) -> dict:
+    """For a video or audio item whose description links a transcript: fetch it and keep it as `transcript` (Markdown).
+
+    The analyzer judges the transcript instead of the description. Silent on failure: the host may be outside the
+    agent's network rules; the item is still complete without it.
+    """
+    if not content.get("kind") or not content.get("transcriptUrl"):
+        return content
+    fetched = fetch(content["transcriptUrl"])
+    if fetched and fetched[0] == "html" and (page := extract(fetched[1], content["transcriptUrl"], "fetch")):
+        content["transcript"] = page["markdown"]
+        content["transcriptWords"] = page["words"]
+        print(f"transcript {page['words']} words from {content['transcriptUrl']}", file=sys.stderr)
+    else:
+        print(f"transcript not fetched: {content['transcriptUrl']}", file=sys.stderr)
+    return content
+
+
 def acquire(url: str, events: list[dict]) -> dict | None:
     for ev in reversed(events):
         if ev.get("html") and (content := media(ev["html"], url) or extract(ev["html"], url, "capture")):
-            return content
+            return attach_transcript(content)
     if content := fetch_and_extract(url):
-        return content
+        return attach_transcript(content)
     for ev in reversed(events):
         if (text := ev.get("text")) and len(text.split()) >= MIN_WORDS:
             return {"title": ev.get("title"), "words": len(text.split()), "images": 0, "extractedBy": "capture-text", "extractedAt": now(), "markdown": text}
@@ -460,6 +571,8 @@ class Store:
     def save(self, folder: str, item: dict, markdown: str | None = None) -> None:
         d = self.items / folder
         d.mkdir(parents=True, exist_ok=True)
+        if transcript := item.pop("transcript", None):
+            (d / "transcript.md").write_text(f"---\nsource: {json.dumps(item.get('transcriptUrl'))}\n---\n\n{transcript}\n")
         if markdown is not None:
             fm = {k: item.get(k) for k in ("title", "url", "author", "published")}
             front = "\n".join(f"{k}: {json.dumps(v, ensure_ascii=False)}" for k, v in fm.items() if v is not None)
@@ -624,8 +737,9 @@ def process(store: Store, canonical: str, evs: list[dict], args: argparse.Namesp
         fresh = next((c for e in reversed(evs) if e.get("html") and (c := media(e["html"], canonical) or extract(e["html"], canonical, "capture"))), None)
         if fresh and (why := redo_reason(item, fresh)):
             markdown = fresh.pop("markdown")
-            for k in ("analysis", "analysisError", "failure", "kind", "durationSeconds", "image"):
+            for k in ("analysis", "analysisError", "failure", "kind", "durationSeconds", "image", "links", "transcriptUrl", "transcriptWords"):
                 item.pop(k, None)
+            (store.items / found[0] / "transcript.md").unlink(missing_ok=True)
             item.update({k: v for k, v in fresh.items() if v is not None}, status="extracted")
             store.feedback({"item": found[0], "action": "re-extract", "reason": f"{why}; captured again with HTML via {evs[-1].get('source', '?')}", "at": now()})
             print(f"redo      items/{found[0]}  {why}", file=sys.stderr)

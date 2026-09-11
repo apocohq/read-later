@@ -61,7 +61,7 @@ The folder is `<first capture time>-<title slug>`, e.g. `2026-09-07T13-00-00Z-ru
 
 | field | meaning |
 |---|---|
-| `url` | canonical URL, the item's identity |
+| `url` | canonical URL, the item's identity. Tracking and share parameters dropped, `www.` removed; every form of a YouTube link (`youtu.be`, `m.youtube.com`, `shorts/`, `&t=`, `&list=`) becomes `https://youtube.com/watch?v=<id>` |
 | `title` | from extraction, else from the capture |
 | `status` | `captured` → `extracted` \| `failed` (adds `failure`, `attempts`, `failedAt`; ingest re-fetches up to 3 times, a day apart) → `analyzed` → `done` (adds `doneAt`) \| `archived` |
 | | A new `capture` of a `done` item reopens it: status back to `analyzed` (or `extracted` if never analyzed), `doneAt` removed, a `reopen` line in `feedback.jsonl` |
@@ -71,7 +71,9 @@ The folder is `<first capture time>-<title slug>`, e.g. `2026-09-07T13-00-00Z-ru
 | `words`, `images` | size of the extracted article; for a video or audio item, the size of its description. `images` is 0 for PDFs, whose figures are not extracted |
 | `pages` | PDFs only: page count |
 | `kind` | `video` or `audio`, only on media items (absent means article). From the page's own Open Graph type (`video.*`, `music.*`); JSON-LD (`VideoObject`, `PodcastEpisode`) counts only when the page declares no type and no article. The analyzer's `contentType` says whether an audio item is a `podcast` or a music track (`not-an-article`) |
-| `durationSeconds`, `image` | play time and cover image, when the page declares them; media items only |
+| `durationSeconds`, `image` | play time and cover image, when the page declares them; media items only. The library page shows the image as the tile's cover |
+| `links` | media items only: URLs from the description's trailer (sponsors, social, episode links). That trailer is cut from `content.md`, so the reader and the analyzer see the description proper and the chapter outline |
+| `transcriptUrl`, `transcriptWords` | media items only: a transcript the description links on the publisher's site. When ingest can fetch it, `transcript.md` sits next to `content.md` and the analyzer judges the transcript instead of the description |
 | `extractedBy` | `capture` (browser HTML), `fetch` (agent fetched the URL), `fetch-pdf` (agent fetched a PDF), `capture-text` (producer's text), `metadata` (video or podcast page: no article, only what the page declares) |
 | `extractedAt` | when |
 
@@ -79,7 +81,7 @@ The folder is `<first capture time>-<title slug>`, e.g. `2026-09-07T13-00-00Z-ru
 
 ```json
 "analysis": {
-  "version": "2", "at": "…", "template": "claude-code", "connection": "ibm-litellm",
+  "version": "5", "at": "…", "template": "claude-code", "connection": "ibm-litellm",
   "tldr": "2-4 sentences stating the claim",
   "keyClaims": ["…", "…"],
   "contentType": "article",   // or paper, news, …, video, podcast, not-an-article
@@ -132,7 +134,7 @@ Produced by the library page (`read-later-deliver`), not by ingest. The page kee
 
 ## Article — `items/<folder>/content.md`
 
-Short frontmatter (`title`, `url`, `author`, `published`, when known), a blank line, then Markdown with headings, links, tables and images (absolute URLs). The full metadata lives in `item.json`. For a video or audio item the body is the publisher's description, which may be short or empty; there is no transcript.
+Short frontmatter (`title`, `url`, `author`, `published`, when known), a blank line, then Markdown with headings, links, tables and images (absolute URLs). The full metadata lives in `item.json`. For a video or audio item the body is the publisher's description with its line structure restored and the sponsor and link trailer removed; it may be short. A linked transcript, when fetched, is `transcript.md` in the same folder.
 
 For a PDF the Markdown comes from PyMuPDF's layout analysis: headings by level, paragraphs joined across lines and pages, tables as pipe tables, running heads and page numbers dropped, no images, no OCR (a scanned PDF fails with too few words). Title, author and date come from the PDF's landing page when the host has one (arXiv's abstract page, via `citation_*` meta tags), else from the first heading and the PDF's own metadata.
 

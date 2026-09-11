@@ -18,8 +18,9 @@
  *   --concurrency <n>       parallel Invocations (default 3)
  *   --ttl-minutes <n>       per-Invocation deadline (default 10)
  *   --max-words <n>         truncate the article beyond this (default 8000)
- *   --force                 re-analyze items that already have a current analysis
- *                           (an analysis from an older prompt version is always redone)
+ *   --force                 re-analyze every item, current or not
+ *                           (without it, an analysis from an older version is redone only for the kinds
+ *                           that version changed: REDO_KINDS)
  *   --dry-run               list the items and print the first assembled prompt; spawn nothing
  *   --json                  one JSON object per item on stdout
  *   --sdk <path>            driver SDK module (default /usr/local/lib/driver-sdk.mjs)
@@ -35,7 +36,11 @@ import { fileURLToPath } from "node:url";
 
 const SKILL_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PROMPTS = ["tldr", "categorize", "score"];
-const ANALYSIS_VERSION = "4";
+const ANALYSIS_VERSION = "5";
+// Items whose old analysis is redone at this version. Analysis describes the article, so a prompt change rarely makes
+// old results wrong; list only the kinds the change was about ("article" for plain articles), or pass --force.
+const REDO_KINDS = ["video", "audio"];
+const MAX_CONSECUTIVE_FAILURES = 3; // then the model connection is treated as down and the run stops
 const TOPIC_FORM = "^[a-z0-9]+(-[a-z0-9]+)*$";
 
 // ---------- args ----------
@@ -133,14 +138,15 @@ function listItems(stateDir, force) {
     .map((d) => ({ folder: d.name, dir: join(itemsDir, d.name) }))
     .filter(({ dir }) => existsSync(join(dir, "item.json")) && existsSync(join(dir, "content.md")))
     .map((it) => ({ ...it, item: readJson(join(it.dir, "item.json")) }))
-    .filter(({ item }) => item.status !== "archived" && (force || !item.analysis || item.analysis.version !== ANALYSIS_VERSION))
+    .filter(({ item }) => item.status !== "archived" && (force || !item.analysis || (item.analysis.version !== ANALYSIS_VERSION && REDO_KINDS.includes(item.kind ?? "article"))))
     .sort((a, b) => a.folder.localeCompare(b.folder));
 }
 
 function articleBody(dir, maxWords) {
-  const body = readFileSync(join(dir, "content.md"), "utf8").replace(/^---\n[\s\S]*?\n---\n/, "").trim();
+  const transcript = existsSync(join(dir, "transcript.md"));  // a video or audio item whose publisher links a transcript: judge that, not the blurb
+  const body = readFileSync(join(dir, transcript ? "transcript.md" : "content.md"), "utf8").replace(/^---\n[\s\S]*?\n---\n/, "").trim();
   const words = body.split(/\s+/);
-  return words.length > maxWords ? { text: words.slice(0, maxWords).join(" "), truncated: true, words: words.length } : { text: body, truncated: false, words: words.length };
+  return { text: words.length > maxWords ? words.slice(0, maxWords).join(" ") : body, truncated: words.length > maxWords, words: words.length, transcript };
 }
 
 function buildPrompt({ item, dir }, prompts, vocab, maxWords) {
@@ -150,8 +156,8 @@ function buildPrompt({ item, dir }, prompts, vocab, maxWords) {
     `url: ${item.url}`,
     item.author && `author: ${item.author}`,
     item.published && `published: ${item.published} (approximate)`,
-    item.kind && `kind: ${item.kind}${item.durationSeconds ? `, ${Math.round(item.durationSeconds / 60)} minutes` : ""}. The text under ARTICLE is the publisher's description, not the ${item.kind} itself.${item.kind === "audio" ? " An audio page is a podcast episode or a music track." : ""}`,
-    `words: ${item.words ?? article.words}`,
+    item.kind && `kind: ${item.kind}${item.durationSeconds ? `, ${Math.round(item.durationSeconds / 60)} minutes` : ""}. ${article.transcript ? `The text under ARTICLE is the publisher's transcript of the ${item.kind}; judge it as you would an article.` : `The text under ARTICLE is the publisher's description, not the ${item.kind} itself.`}${item.kind === "audio" ? " An audio page is a podcast episode or a music track." : ""}`,
+    `words: ${article.words}`,
   ].filter(Boolean);
   return [
     "You analyze one saved web article and report a structured result. The result describes the article itself, not any reader.",
@@ -211,11 +217,11 @@ async function main() {
   if (!template) fail(`no usable template${opts.template ? ` ${opts.template}` : " matching /claude/"}. Available: ${images.map((i) => i.id).join(", ")}`);
   log(`invocations: template ${template.id}, connection ${connection.name} only, ${Math.min(opts.concurrency, items.length)} in parallel, ${opts.ttlMinutes} min deadline`);
 
-  let ok = 0, failed = 0;
+  let ok = 0, failed = 0, streak = 0, tripped = false;
   const coined = [];
   const queue = [...items];
   const worker = async () => {
-    for (let it = queue.shift(); it; it = queue.shift()) {
+    for (let it = queue.shift(); it && !tripped; it = queue.shift()) {
       const started = Date.now();
       try {
         const result = await sdk.spawn({
@@ -231,10 +237,12 @@ async function main() {
         writeFileSync(join(it.dir, "item.json"), JSON.stringify(item, null, 2) + "\n");
         coined.push(...result.topics.filter((t) => !vocab.topics.includes(t)));
         ok++;
+        streak = 0;
         const line = { item: `items/${it.folder}`, status: "analyzed", category: result.category, hardWon: result.hardWon.score, grounded: result.grounded.score, topics: result.topics, seconds: Math.round((Date.now() - started) / 1000) };
         console.log(opts.json ? JSON.stringify(line) : `analyzed  ${result.category.padEnd(22)} hardWon ${String(result.hardWon.score).padStart(2)}  grounded ${String(result.grounded.score).padStart(2)}  items/${it.folder}`);
       } catch (e) {
         failed++;
+        if (++streak >= MAX_CONSECUTIVE_FAILURES && !ok) tripped = true;  // nothing has worked: the connection is down, stop spawning
         const item = { ...it.item, analysisError: { at: now(), message: String(e.message ?? e) } };
         writeFileSync(join(it.dir, "item.json"), JSON.stringify(item, null, 2) + "\n");
         console.log(opts.json ? JSON.stringify({ item: `items/${it.folder}`, status: "analysis-failed", error: String(e.message ?? e) }) : `failed    items/${it.folder}  ${e.message ?? e}`);
@@ -242,6 +250,11 @@ async function main() {
     }
   };
   await Promise.all(Array.from({ length: Math.max(1, Math.min(opts.concurrency, items.length)) }, worker));
+  if (tripped) {
+    const left = items.length - ok - failed;
+    log(`model connection unavailable: ${failed} Invocation(s) failed in a row and none succeeded; ${left} item(s) left for the next run. Report this and stop; do not diagnose the platform.`);
+    if (opts.json) console.log(JSON.stringify({ status: "connection-unavailable", failed, left }));
+  }
   const added = appendTopics(vocab, coined);
   if (added.length) log(`new topics appended to topics.md (unweighted, count as 5): ${added.join(", ")}`);
   log(`done: ${ok} analyzed, ${failed} failed`);
