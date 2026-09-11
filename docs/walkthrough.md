@@ -127,17 +127,29 @@ A review on a fresh agent (2026-09-10/11) found where a refresh loses time and w
 - **Topics.** The categorize prompt caps coinage at one new label per article and forbids product, person and place names; four test items had coined twelve labels (`helix`, `vim`, `abraham-lincoln`).
 - **YouTube.** `youtu.be/ID`, `m.youtube.com`, `shorts/ID`, `&t=`, `&list=` all canonicalize to `https://youtube.com/watch?v=ID`; the same rule in `slack.py`.
 
+## Step 9 · A dedicated agent, context over the DAM CLI  ✅ works
+
+Read-later moved off the personal assistant onto its own agent, `read-later` (agent-b7db0b522b8a10cc), created 2026-09-11. The reason: the library, the schedules and the untrusted page content no longer sit inside the assistant's workspace, and the assistant keeps doing its own work. The 42 items, `topics.md`, `feedback.jsonl` and the Slack ledger came over in a tar over SSH; `deliver.json` was dropped so the first deliver publishes its own artifact.
+
+What is new is how the reweigh still knows the reader. `context.md` now names files on **another** agent and the command that fetches them:
+
+    ~/.local/bin/dam file get guido work/USER.md --stdout
+
+The agent has the DAM CLI under `~/.local` (only the home directory survives hibernation) and an API key in `DAM_TOKEN`, minted with `--scope agents:operate --agent <guido-id>`, so the key reads that one agent and nothing else. The key reaches the pod as a **Custom header credential** connection, whose environment-variable field sets `DAM_TOKEN`; an agent that already exists has no other way to gain an environment variable. `read-later-rank` gained one sentence: if `context.md` carries a fetch command, run it as written, read-only, and skip reweighing if it fails. INSTALL.md section E is the whole recipe.
+
+Two things cost an hour and are written down so they do not again. File reads need `agents:operate`; `agents:read` is refused. And a freshly minted key was rejected for about a minute with "session expired", which reads like an expired login and is not: the CLI prints that for any 401 from the server, and the key validator is a plain database lookup with no cache, so the row was simply not visible yet.
+
 ## Where things stand
 
-- Steps 1-7 work end to end on two agents: `first-reader` (your bookmarks) and `read-later-test` (the INSTALL.md rehearsal). Both run `read-later-refresh` at 18:00 Prague and `read-later-prune` on Sundays.
+- Steps 1-9 work end to end. The live host is now `read-later`, with the two schedules at 18:00 Prague and Sundays 09:00; guido keeps the skills but both of its read-later schedules are disabled.
 - Marking as read: *Mark as read* in the extension, or tell the agent in chat; either way it is a `done` event through ingest. The artifact cannot call the agent back until DAM ships its artifact bridge.
 - Highlights: the reader pane has a highlighter (toggle, select text, click a mark for a note or to remove it). Highlights stay in the browser until *Copy for chat* or *Done reading* puts the content of `highlights.json` on the clipboard and you paste it to the agent; the agent writes the file into the item folder verbatim (no ingest) and the next deliver shows them on every device. Until the bridge, that paste is the only path, so highlights made on one device reach another only after you have sent them. In DAM's viewer they also do not survive a reload, so send before you leave; a DAM change for storage is the next step.
 - Open polish, all small: the analyzer files engineering-flavoured agent pieces under `ai-and-agents`; every topic weight is still 5 until you or the host agent sets them; `first-reader` has a stray `context.md` and `index.json` from earlier versions, harmless.
 
 ## Next
 
-1. Set a first pass of topic weights, or move to an agent that knows you (Guido) and point `context.md` at its memory files so the nightly reweigh does it.
-2. Point the extension at that agent (new key bound to it) and use *Mark as read* for a week; check that `done/` fills and Tonight changes.
+1. Point the extension at `read-later` (new key bound to it) and use *Mark as read* for a week; check that `done/` fills and Tonight changes.
+2. Watch the first refresh on the new agent: the reweigh should report which weights it changed from guido's files, not "no context".
 3. Feed what you finish reading back into the weights (topics of `done/` items drift up).
 4. When DAM's artifact bridge ships: the page sends the highlight event itself, on every change. One transport function in the template, nothing on the agent.
 5. Use Save for later in Slack for a week; tune the drop and skip lists in `slack.py` if noise gets through. Then the multi-user template; a name.

@@ -29,7 +29,7 @@ Per item: `relevance` = mean of the two highest topic weights among its topics (
 The reader's interests are the weights in `~/work/read-later/topics.md` (`- agent-cost: 9`, 0-10, how much they care right now). This is the one place the reader's context enters the system, and it is your judgment, not a script's. Every run:
 
 1. Read `~/work/read-later/context.md`. It says where the reader's context lives (which files or notes to read) or contains the line `NO CONTEXT AVAILABLE`. If the file is missing or carries that marker, skip reweighing entirely: leave the numbers as they are, say so in one line, and go straight to ranking.
-2. Otherwise read the context sources it names, then adjust weights: raise topics tied to what the reader is working on or deciding now, lower topics they have parked, and give a number to labels that have none. Change only what the context supports; a weight is a claim about the reader, not a guess. Do not ask the reader to grade thirty labels.
+2. Otherwise read the context sources it names. If `context.md` says how to fetch them (for example a `dam file get ... --stdout` command, because the files live on another agent), run that command as written, read-only, once per file; if it fails, say so in one line and skip reweighing. Then adjust weights: raise topics tied to what the reader is working on or deciding now, lower topics they have parked, and give a number to labels that have none. Change only what the context supports; a weight is a claim about the reader, not a guess. Do not ask the reader to grade thirty labels.
 3. Never delete a label that items still carry; that is `read-later-prune`'s job.
 
 Then run the script.
