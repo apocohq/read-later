@@ -22,7 +22,7 @@ From this skill's directory:
 python3 scripts/rank.py ~/work/read-later
 ```
 
-Per item: `relevance` = mean of the two highest topic weights among its topics (unweighted topics count 5); `quality` = mean of hard-won and grounded; `priority` = half of each, minus 1 for anything over 18 minutes (about 4000 words, or a long video or episode), plus 3 for must-read. Minutes are play time for a video or podcast and reading time for an article. Excluded: archived, unanalyzed, `not-an-article`, and news or announcements older than 14 days. The top three are **Read today**, the next four **Read next**, the rest **Later**.
+Per item: `relevance` = mean of the two highest topic weights among its topics (unweighted topics count 5); `quality` = mean of hard-won and grounded; `priority` = half of each, minus 1 for anything over 18 minutes (4140 words at 230 words per minute, or a long video or episode), plus 3 for must-read. Minutes are play time for a video or audio item and reading time for an article. Excluded: archived, unanalyzed, `not-an-article`, and news or announcements older than 14 days. The top three are **Read today**, the next four **Read next**, the rest **Later**.
 
 ## Before ranking: reweigh the topics
 

@@ -11,10 +11,12 @@ into the template, and writes STATE_DIR/queue.html.
 The template is the design; this script only supplies data. To restyle, edit the
 template (or drop a copy at STATE_DIR/template.html, which wins).
 
-Records the data's hash in STATE_DIR/deliver.json and prints one JSON object:
-{"html": "<path>", "changed": true|false, "artifactId": "<id or null>", "items": N}.
-`changed` is false when the data and the template are identical to the last publish,
-so the agent can skip publishing a new artifact version.
+Prints one JSON object: {"html": "<path>", "changed": true|false, "artifactId": "<id or null>", "items": N}.
+`changed` is false when the data and the template are identical to the last *published* render,
+so the agent can skip publishing a new artifact version. After a successful create_artifact or
+update_artifact the agent runs `render.py --published <artifact id> STATE_DIR`, which records the id
+and the published hash in deliver.json. A publish that failed is therefore retried on the next run,
+and a publish that succeeded is not repeated.
 
 Exit codes: 0 ran, 2 bad arguments, 3 STATE_DIR or queue.json missing.
 """
@@ -95,11 +97,27 @@ def via(item: dict) -> dict | None:
     return None
 
 
+def record_published(root: Path, artifact_id: str) -> int:
+    """After create_artifact or update_artifact succeeded: remember the id and which render went out."""
+    dpath = root / "deliver.json"
+    state = json.loads(dpath.read_text()) if dpath.exists() else {}
+    if not state.get("renderedHash"):
+        print(f"error: {dpath} has no renderedHash; run render.py without --published first", file=sys.stderr)
+        return 3
+    state.update(artifactId=artifact_id, publishedHash=state["renderedHash"])
+    dpath.write_text(json.dumps(state, indent=2) + "\n")
+    print(json.dumps({"artifactId": artifact_id, "publishedHash": state["publishedHash"]}))
+    return 0
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="render.py", description="Render the read-later library page from the template and the state dir; report whether it changed.")
     ap.add_argument("state_dir", metavar="STATE_DIR")
+    ap.add_argument("--published", metavar="ARTIFACT_ID", help="record that the last rendered page was published as this artifact; render nothing")
     args = ap.parse_args(argv)
     root = Path(args.state_dir).expanduser().resolve()
+    if args.published:
+        return record_published(root, args.published)
     qpath = root / "queue.json"
     if not qpath.exists():
         print(f"error: {qpath} missing. Run read-later-rank first.", file=sys.stderr)
@@ -123,8 +141,11 @@ def main(argv: list[str]) -> int:
     digest = hashlib.sha256((json.dumps({**data, "generatedAt": None}, sort_keys=True, ensure_ascii=False) + template).encode()).hexdigest()
     dpath = root / "deliver.json"
     state = json.loads(dpath.read_text()) if dpath.exists() else {}
-    changed = state.get("contentHash") != digest or not state.get("artifactId")  # never published yet counts as changed
-    state["contentHash"] = digest
+    published = state.get("publishedHash") or state.get("contentHash")  # contentHash: written by older versions after a publish
+    changed = published != digest or not state.get("artifactId")
+    if state.pop("contentHash", None) and state.get("artifactId") and not state.get("publishedHash"):
+        state["publishedHash"] = published  # migrate from the older scheme once
+    state["renderedHash"] = digest
     dpath.write_text(json.dumps(state, indent=2) + "\n")
     print(json.dumps({"html": str(root / "queue.html"), "changed": changed, "artifactId": state.get("artifactId"), "items": len(items)}))
     return 0

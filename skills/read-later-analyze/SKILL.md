@@ -44,7 +44,7 @@ Written into `items/<folder>/item.json` as `analysis`; `status` becomes `analyze
 
 `tldr`, `keyClaims[1-3]`, `contentType`, `category`, `topics[]`, `hardWon {score 0-10, reason}`, `grounded {score 0-10, reason}`, plus `version`, `at`, `template`, `connection`.
 
-Video and podcast items (`kind` in `item.json`) carry only the publisher's description, and the prompt says so; they get `contentType` `video` or `podcast` and are scored on what the description shows.
+Video and audio items (`kind` in `item.json`) carry only the publisher's description, and the prompt says so; they get `contentType` `video` or `podcast` (a music track is `not-an-article`) and are scored on what the description shows.
 
 ## Customizing
 
