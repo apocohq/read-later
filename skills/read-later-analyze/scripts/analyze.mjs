@@ -35,7 +35,7 @@ import { fileURLToPath } from "node:url";
 
 const SKILL_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PROMPTS = ["tldr", "categorize", "score"];
-const ANALYSIS_VERSION = "3";
+const ANALYSIS_VERSION = "4";
 const TOPIC_FORM = "^[a-z0-9]+(-[a-z0-9]+)*$";
 
 // ---------- args ----------
@@ -150,7 +150,7 @@ function buildPrompt({ item, dir }, prompts, vocab, maxWords) {
     `url: ${item.url}`,
     item.author && `author: ${item.author}`,
     item.published && `published: ${item.published} (approximate)`,
-    item.kind && `kind: ${item.kind}${item.durationSeconds ? `, ${Math.round(item.durationSeconds / 60)} minutes` : ""}. The text under ARTICLE is the publisher's description, not the ${item.kind} itself.`,
+    item.kind && `kind: ${item.kind}${item.durationSeconds ? `, ${Math.round(item.durationSeconds / 60)} minutes` : ""}. The text under ARTICLE is the publisher's description, not the ${item.kind} itself.${item.kind === "audio" ? " An audio page is a podcast episode or a music track." : ""}`,
     `words: ${item.words ?? article.words}`,
   ].filter(Boolean);
   return [

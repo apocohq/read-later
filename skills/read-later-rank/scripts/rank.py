@@ -12,7 +12,7 @@ Scoring, per item, all on a 0-10 scale:
     relevance = mean of the two highest topic weights among the item's topics
     quality   = (hardWon + grounded) / 2
     priority  = 0.5 * relevance + 0.5 * quality
-                - 1 if it takes over 18 minutes: about 4000 words, or a long video or episode (long ones need to earn it)
+                - 1 if it takes over 18 minutes (4140 words at 230 wpm, or a long video or episode); the exact value, not the rounded minutes
                 + 3 if mustRead
     excluded: archived or done items, items without analysis, `not-an-article`,
               news/announcements published more than 14 days ago.
@@ -33,7 +33,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 DEFAULT_WEIGHT = 5
-LONG_READ_MINUTES = 18  # about 4000 words at reading speed
+LONG_READ_MINUTES = 18  # 4140 words at 230 wpm; compared exactly, not rounded
 WORDS_PER_MINUTE = 230
 NEWS_MAX_AGE_DAYS = 14
 WEIGHTS = {"relevance": 0.5, "quality": 0.5}
@@ -80,7 +80,7 @@ def score(item: dict, weights: dict[str, int], today: date) -> tuple[float, dict
     quality = (a["hardWon"]["score"] + a["grounded"]["score"]) / 2
     priority = WEIGHTS["relevance"] * relevance + WEIGHTS["quality"] * quality
     notes = []
-    if minutes(item) > LONG_READ_MINUTES:
+    if exact_minutes(item) > LONG_READ_MINUTES:
         priority -= 1
         notes.append("long read" if not item.get("kind") else f"long {item['kind']}")
     if item.get("mustRead"):
@@ -111,11 +111,15 @@ def slack_skipped(root: Path) -> list[dict]:
              "by": s.get("by"), "sourceRef": s.get("permalink"), "at": s.get("at")} for s in rows if isinstance(s, dict) and s.get("url")]
 
 
-def minutes(item: dict) -> int:
-    """Play time for a video or podcast, reading time for an article."""
+def exact_minutes(item: dict) -> float:
+    """Play time for a video or audio item, reading time for an article."""
     if item.get("durationSeconds"):
-        return max(1, round(item["durationSeconds"] / 60))
-    return max(1, round((item.get("words") or 0) / WORDS_PER_MINUTE))
+        return item["durationSeconds"] / 60
+    return (item.get("words") or 0) / WORDS_PER_MINUTE
+
+
+def minutes(item: dict) -> int:
+    return max(1, round(exact_minutes(item)))
 
 
 def render_md(buckets: dict[str, list[dict]], today: date, needs: list[dict] | None = None) -> str:

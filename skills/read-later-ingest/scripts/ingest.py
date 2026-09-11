@@ -19,8 +19,8 @@ Layout under STATE_DIR:
     items/<folder>/content.md  the article: short frontmatter + Markdown (with images)
     feedback.jsonl             append-only log (archive lines land here)
 
-Video and podcast pages (Open Graph type video.* or music.*, or a VideoObject/PodcastEpisode in
-JSON-LD) have no article to extract. They become items with `kind`, `durationSeconds`, `image`
+Video and audio pages (Open Graph type video.* or music.*; JSON-LD VideoObject/PodcastEpisode only when
+the page declares no type and no article) have no article to extract. They become items with `kind`, `durationSeconds`, `image`
 and the publisher's description as content.md, and skip the minimum-words check.
 
 Dedup key is the canonical `url` inside each item.json; there is no separate index.
@@ -317,45 +317,70 @@ def ld_nodes(tree) -> list[dict]:
 
 
 def parse_duration(value) -> int | None:
-    """Seconds from an ISO 8601 duration (PT1H2M3S), a plain number of seconds, or nothing."""
-    s = str(value or "").strip()
+    """Seconds from an ISO 8601 duration (PT1H2M3S, PT3.5S), a plain number of seconds, or nothing. Zero counts as unknown."""
+    s = str(text(value) or "").strip()
     if s.isdigit():
-        return int(s)
-    m = re.fullmatch(r"P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", s)
+        return int(s) or None
+    m = re.fullmatch(r"P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?", s)
     if not m or not any(m.groups()):
         return None
-    d, h, mi, sec = (int(x or 0) for x in m.groups())
-    return d * 86400 + h * 3600 + mi * 60 + sec
+    d, h, mi, sec = (float(x or 0) for x in m.groups())
+    return round(d * 86400 + h * 3600 + mi * 60 + sec) or None
 
 
-def youtube_description(html: str) -> str | None:
-    """YouTube truncates its meta description; the full one is in the player response the page embeds."""
+def text(value) -> str | None:
+    """A string out of a JSON-LD value: plain string, first of a list, or the @value / name of an object."""
+    if isinstance(value, list):
+        value = value[0] if value else None
+    if isinstance(value, dict):
+        value = value.get("@value") or value.get("name")
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def youtube_description(html: str, url: str) -> str | None:
+    """YouTube truncates its meta description; the full one is in the player response the page embeds.
+    The page is a single-page app, so the embedded response can describe an earlier video: use it only
+    when its video id matches the URL."""
     start = html.find("ytInitialPlayerResponse = ")
     if start == -1:
         return None
     try:
         obj, _ = json.JSONDecoder().raw_decode(html[start + len("ytInitialPlayerResponse = "):])
-        desc = obj.get("videoDetails", {}).get("shortDescription")
+        details = obj.get("videoDetails", {})
+        wanted = dict(parse_qsl(urlsplit(url).query)).get("v") or urlsplit(url).path.rsplit("/", 1)[-1]
+        if details.get("videoId") != wanted:
+            return None
+        desc = details.get("shortDescription")
         return desc if isinstance(desc, str) else None
     except Exception:  # noqa: BLE001
         return None
 
 
+ARTICLE_TYPES = {"article", "newsarticle", "blogposting", "report", "scholarlyarticle", "techarticle"}
+
+
 def media(html: str, url: str) -> dict | None:
-    """A video or podcast page has no article to extract, so keep what the page declares about itself:
-    title, description, duration, channel or show, date, cover image. Kind comes from the Open Graph
-    type (video.* → video, music.* → podcast; Spotify labels episodes music.song) or from JSON-LD."""
+    """A video or audio page has no article to extract, so keep what the page declares about itself:
+    title, description, duration, channel or show, date, cover image. The page's own Open Graph type
+    decides (video.* → video, music.* → audio; Spotify labels episodes music.song). JSON-LD decides only
+    when the page declares no type and describes no article, so an article with an embedded clip stays an article."""
     try:
         tree = lxml_html.fromstring(html)
     except Exception:  # noqa: BLE001
         return None
     ld = ld_nodes(tree)
-    types = {str(n.get("@type", "")).lower() for n in ld}
+    types = {t.lower() for n in ld for t in (n.get("@type") if isinstance(n.get("@type"), list) else [n.get("@type")]) if isinstance(t, str)}
     og_type = "".join(tree.xpath('//meta[@property="og:type"]/@content')[:1]).lower()
-    if og_type.startswith("video") or "videoobject" in types:
+    if og_type.startswith("video"):
         kind = "video"
-    elif og_type.startswith("music") or types & {"podcastepisode", "audioobject"}:
-        kind = "podcast"
+    elif og_type.startswith("music"):
+        kind = "audio"
+    elif og_type or types & ARTICLE_TYPES:
+        return None
+    elif "videoobject" in types:
+        kind = "video"
+    elif types & {"podcastepisode", "audioobject"}:
+        kind = "audio"
     else:
         return None
 
@@ -365,16 +390,16 @@ def media(html: str, url: str) -> dict | None:
     def first(*values):
         return next((v for v in values if v), None)
 
-    descriptions = meta("description", "og:description", "twitter:description") + [n.get("description") for n in ld] + [youtube_description(html)]
-    description = max((d for d in descriptions if isinstance(d, str)), key=len, default="")
-    description = re.sub(r"^Listen to this episode from .+? on Spotify\.\s*", "", description).strip()
-    show = next((d.split(" · ")[0] for d in meta("og:description") if " · " in d and len(d) < 80), None)  # Spotify: "Show name · Episode"
-    series = [n["partOfSeries"].get("name") for n in ld if isinstance(n.get("partOfSeries"), dict)]
+    descriptions = meta("description", "og:description", "twitter:description") + [text(n.get("description")) for n in ld] + [youtube_description(html, url)]
+    description = max((d for d in descriptions if d), key=len, default="")
+    spotify = re.match(r"Listen to this episode from (.+?) on Spotify\.\s*", description)  # the show name is in that sentence
+    description = description[spotify.end():].strip() if spotify else description
+    series = [text(n["partOfSeries"].get("name")) for n in ld if isinstance(n.get("partOfSeries"), dict)]
     published = first(*meta("music:release_date", "uploadDate", "datePublished", "video:release_date", "article:published_time"),
-                      *[n.get("datePublished") or n.get("uploadDate") for n in ld])
+                      *[text(n.get("datePublished") or n.get("uploadDate")) for n in ld])
     return {
-        "title": first(*meta("og:title"), *[n.get("name") for n in ld], *tree.xpath("//title/text()")),
-        "author": first(*tree.xpath('//*[@itemprop="author"]//*[@itemprop="name"]/@content'), *series, declared_author(html), show),
+        "title": first(*meta("og:title"), *[text(n.get("name")) for n in ld], *[t.strip() for t in tree.xpath("//title/text()")]),
+        "author": first(*tree.xpath('//*[@itemprop="author"]//*[@itemprop="name"]/@content'), *series, declared_author(html), spotify and spotify.group(1)),
         "published": published[:10] if published and re.match(r"\d{4}-\d{2}-\d{2}", published) else None,
         "kind": kind,
         "durationSeconds": first(*(parse_duration(v) for v in meta("music:duration", "duration", "og:video:duration", "video:duration") + [n.get("duration") for n in ld])),
@@ -568,6 +593,54 @@ def redo_reason(item: dict, fresh: dict) -> str | None:
     return None
 
 
+def process(store: Store, canonical: str, evs: list[dict], args: argparse.Namespace, ok: int, failed: int) -> tuple[int, int]:
+    """One URL's captures → one item folder; deletes the inbox files it consumed. Raises on a bad page so main() can report it and move on."""
+    found = store.get(canonical)
+    item = found[1] if found else {"url": canonical, "title": first_title(evs), "status": "captured", "mustRead": False, "captures": []}
+    if found or len(evs) > 1:
+        print(f"merged    {len(evs)} capture(s) into {'existing' if found else 'new'} item  {canonical}", file=sys.stderr)
+    item["captures"] += [capture_record(e) for e in evs]
+    item["mustRead"] = item["mustRead"] or any(e.get("mustRead") for e in evs)
+    if item["status"] == "done":  # a fresh capture of a finished item puts it back in the queue
+        item["status"] = "analyzed" if item.get("analysis") else "extracted"
+        item.pop("doneAt", None)
+        store.feedback({"item": found[0], "action": "reopen", "reason": f"captured again via {evs[-1].get('source', '?')}", "at": now()})
+        print(f"reopened  items/{found[0]}", file=sys.stderr)
+    markdown = None
+    if not found or not (store.items / found[0] / "content.md").exists():
+        if content := acquire(canonical, evs):
+            markdown = content.pop("markdown")
+            item.update({k: v for k, v in content.items() if v is not None}, status="extracted")
+            item["title"] = item.get("title") or first_title(evs)
+            item.pop("failure", None)
+            ok += 1
+        else:
+            item.update(status="failed", failure=f"no source yielded at least {MIN_WORDS} words", attempts=item.get("attempts", 0) + 1, failedAt=now())
+            failed += 1
+    elif any(e.get("html") for e in evs) and not has_highlights(store.items / found[0]):
+        # The item has text already and the browser sent HTML again: extract from it and keep the better of the two.
+        # Better = clearly more text (a paywalled fetch replaced by the logged-in page), or the analyzer had judged the
+        # old text not-an-article. Highlights anchor to the old text, so an item with highlights is never replaced.
+        fresh = next((c for e in reversed(evs) if e.get("html") and (c := media(e["html"], canonical) or extract(e["html"], canonical, "capture"))), None)
+        if fresh and (why := redo_reason(item, fresh)):
+            markdown = fresh.pop("markdown")
+            for k in ("analysis", "analysisError", "failure", "kind", "durationSeconds", "image"):
+                item.pop(k, None)
+            item.update({k: v for k, v in fresh.items() if v is not None}, status="extracted")
+            store.feedback({"item": found[0], "action": "re-extract", "reason": f"{why}; captured again with HTML via {evs[-1].get('source', '?')}", "at": now()})
+            print(f"redo      items/{found[0]}  {why}", file=sys.stderr)
+            ok += 1
+    folder = found[0] if found else store.new_folder(evs[0]["capturedAt"], item.get("title"), canonical)
+    store.save(folder, item, markdown)
+    for e in evs:
+        e["_path"].unlink(missing_ok=True)
+    if args.json:
+        print(json.dumps({"item": f"items/{folder}", "status": item["status"], "title": item.get("title"), "failure": item.get("failure")}))
+    else:
+        print(f"{item['status']:9} items/{folder}")
+    return ok, failed
+
+
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
     root = Path(args.state_dir).expanduser().resolve()
@@ -584,49 +657,10 @@ def main(argv: list[str]) -> int:
 
     ok = failed = 0
     for canonical, evs in apply_removals(store, apply_done(store, events)).items():
-        found = store.get(canonical)
-        item = found[1] if found else {"url": canonical, "title": first_title(evs), "status": "captured", "mustRead": False, "captures": []}
-        if found or len(evs) > 1:
-            print(f"merged    {len(evs)} capture(s) into {'existing' if found else 'new'} item  {canonical}", file=sys.stderr)
-        item["captures"] += [capture_record(e) for e in evs]
-        item["mustRead"] = item["mustRead"] or any(e.get("mustRead") for e in evs)
-        if item["status"] == "done":  # a fresh capture of a finished item puts it back in the queue
-            item["status"] = "analyzed" if item.get("analysis") else "extracted"
-            item.pop("doneAt", None)
-            store.feedback({"item": found[0], "action": "reopen", "reason": f"captured again via {evs[-1].get('source', '?')}", "at": now()})
-            print(f"reopened  items/{found[0]}", file=sys.stderr)
-        markdown = None
-        if not found or not (store.items / found[0] / "content.md").exists():
-            if content := acquire(canonical, evs):
-                markdown = content.pop("markdown")
-                item.update({k: v for k, v in content.items() if v is not None}, status="extracted")
-                item["title"] = item.get("title") or first_title(evs)
-                item.pop("failure", None)
-                ok += 1
-            else:
-                item.update(status="failed", failure=f"no source yielded at least {MIN_WORDS} words", attempts=item.get("attempts", 0) + 1, failedAt=now())
-                failed += 1
-        elif any(e.get("html") for e in evs) and not has_highlights(store.items / found[0]):
-            # The item has text already and the browser sent HTML again: extract from it and keep the better of the two.
-            # Better = clearly more text (a paywalled fetch replaced by the logged-in page), or the analyzer had judged the
-            # old text not-an-article. Highlights anchor to the old text, so an item with highlights is never replaced.
-            fresh = next((c for e in reversed(evs) if e.get("html") and (c := media(e["html"], canonical) or extract(e["html"], canonical, "capture"))), None)
-            if fresh and (why := redo_reason(item, fresh)):
-                markdown = fresh.pop("markdown")
-                for k in ("analysis", "analysisError", "failure", "kind", "durationSeconds", "image"):
-                    item.pop(k, None)
-                item.update({k: v for k, v in fresh.items() if v is not None}, status="extracted")
-                store.feedback({"item": found[0], "action": "re-extract", "reason": f"{why}; captured again with HTML via {evs[-1].get('source', '?')}", "at": now()})
-                print(f"redo      items/{found[0]}  {why}", file=sys.stderr)
-                ok += 1
-        folder = found[0] if found else store.new_folder(evs[0]["capturedAt"], item.get("title"), canonical)
-        store.save(folder, item, markdown)
-        for e in evs:
-            e["_path"].unlink(missing_ok=True)
-        if args.json:
-            print(json.dumps({"item": f"items/{folder}", "status": item["status"], "title": item.get("title"), "failure": item.get("failure")}))
-        else:
-            print(f"{item['status']:9} items/{folder}")
+        try:
+            ok, failed = process(store, canonical, evs, args, ok, failed)
+        except Exception as e:  # noqa: BLE001
+            print(f"error     {canonical}: {type(e).__name__}: {e}; its inbox file(s) stay for the next run", file=sys.stderr)
     retried = retry_failed(store, args.json)
     print(f"done: {ok} extracted, {failed} failed" + (f", {retried} recovered on retry" if retried else ""), file=sys.stderr)
     return 0

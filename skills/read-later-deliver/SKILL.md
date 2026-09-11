@@ -44,8 +44,9 @@ python3 scripts/render.py ~/work/read-later
 Then, based on the printed JSON:
 
 - `changed: false` → say "queue unchanged, artifact not republished" and stop.
-- `changed: true` and `artifactId: null` → first publish. Call `create_artifact` with the file's content, title `Read later`, file name `queue.html`, kind HTML, visibility private. Write the returned artifact id into `~/work/read-later/deliver.json` as `"artifactId"` (keep the existing `contentHash` key). Keep the id; the reader's link depends on it.
+- `changed: true` and `artifactId: null` → first publish. Call `create_artifact` with the file's content, title `Read later`, file name `queue.html`, kind HTML, visibility private. Keep the id; the reader's link depends on it.
 - `changed: true` and an `artifactId` → call `update_artifact` with that id and the new content. Same link, new version.
+- After a successful create or update, run `python3 scripts/render.py --published <artifact id> ~/work/read-later`. That records the id and marks this render as published; without it the next run publishes again. If the publish failed, do not run it: the next run retries.
 
 Do not read `queue.html` into your context; it is a few KB of generated HTML. Either pass its content to the tool directly, or use `create_artifact_upload_url` and `curl -sS -X PUT -H 'Content-Type: text/html; charset=utf-8' --data-binary @queue.html '<url>'`, then pass the `upload_ref`. Never create a second artifact for the queue: if `update_artifact` fails because the artifact is gone, say so and ask before creating a new one.
 

@@ -9,4 +9,4 @@ Rules:
 - Neutral register. No praise, no "this insightful piece".
 - Quote at most one short phrase.
 - If the text is not an article (a landing page, a login wall, a listing, an error page), say so in the TL;DR and set `contentType` to `not-an-article`.
-- If the item is a video or podcast (its `kind` says so), the text is the publisher's description. Say what the episode covers and who speaks, as far as the description tells, and set `contentType` to `video` or `podcast`; it is not `not-an-article`.
+- If the item is a video or audio page (its `kind` says so), the text is the publisher's description. Say what it covers and who speaks, as far as the description tells. A video gets `contentType` `video`; a podcast episode gets `podcast`; a music track, album or playlist is `not-an-article`.
