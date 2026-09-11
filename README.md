@@ -8,7 +8,7 @@ Chrome extension ─▶ inbox/<id>.json ─▶ ingest ─▶ items/ ─▶ analy
 ```
 
 - `extension/` — the Chrome extension. Setup in `extension/README.md`.
-- `skills/` — the agent skills, one per capability: `read-later-ingest` (inbox → articles), `read-later-analyze` (articles → TL;DR, category, topics, scores), `read-later-rank` (weights + scores → tonight's queue), `read-later-deliver` (queue → one artifact), `read-later-prune` (weekly housekeeping).
+- `skills/` — the agent skills, one per capability: `read-later-slack` (messages you saved in Slack → inbox events), `read-later-ingest` (inbox → articles), `read-later-analyze` (articles → TL;DR, category, topics, scores), `read-later-rank` (weights + scores → tonight's queue), `read-later-deliver` (queue → one artifact), `read-later-prune` (weekly housekeeping).
 - `INSTALL.md` — setting up an agent, end to end, by telling the agent or from the CLI.
 - `docs/walkthrough.md` — how it was built, what was tested, what is next.
 - `docs/design.md` — the decisions behind it.
@@ -22,17 +22,17 @@ Chrome extension ─▶ inbox/<id>.json ─▶ ingest ─▶ items/ ─▶ analy
 
 ## Install
 
-One DAM agent with a model connection and network access (the owner grants both, once). Then either:
+One DAM agent with a model connection and network access (the owner grants both, once). The agent then installs the rest on itself; a human is needed only for what the platform gives no agent: a connection, a network rule, a restart, an API key, and the browser. Either:
 
 - **Tell the agent.** Paste into its chat:
 
   > Install read-later on yourself as described in https://raw.githubusercontent.com/apocohq/read-later/main/INSTALL.md
 
-  The agent installs the five skills onto itself, writes its reader context, creates the two schedules, and reports back. Works on any DAM agent that is already running.
+  The agent installs the six skills onto itself, writes its reader context, downloads the dependencies, creates the two schedules, and reports back with the short list of commands left for you. Works on any DAM agent that is already running.
 
-- **From the CLI.** `dam skill install` for the five skills, `dam file put` for the context file, `dam schedule create` twice.
+- **From the CLI.** `dam skill install` for the six skills, `dam file put` for the context file, `dam schedule create` twice.
 
-Both paths and the extension setup are in `INSTALL.md`.
+The extension is not in the Chrome Web Store: clone this repo, `pnpm install && pnpm ext:build`, and load `extension/dist` unpacked. Both install paths, the extension and the key it needs are in `INSTALL.md`.
 
 ## Versioning
 
