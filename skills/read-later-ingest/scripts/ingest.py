@@ -77,10 +77,11 @@ TRACKING = re.compile(r"^(utm_|fbclid$|gclid$|mc_|ref$|source$|si$|nd$|dlsi$)") 
 # Per-host parameters that name a position in the media or the share, not the page: the same page with and
 # without them is one item. Host-scoped, because `t` and `s` mean real things on other sites.
 SITE_PARAMS = {
-    "youtube.com": {"t", "start", "feature", "list", "index", "pp", "app"},
+    "youtube.com": {"t", "start", "feature", "pp", "app"},
     "x.com": {"t", "s"},
     "twitter.com": {"t", "s"},
 }
+WATCH_PARAMS = {"list", "index"}  # part of a playlist URL's identity, noise on a watch URL
 SLUG_MAX = 60
 RETRY_MAX = 3
 RETRY_AFTER_HOURS = 20
@@ -118,13 +119,13 @@ def canonicalize(url: str) -> str:
     if p.port and not ((p.scheme == "https" and p.port == 443) or (p.scheme == "http" and p.port == 80)):
         host = f"{host}:{p.port}"
     path = p.path.rstrip("/") or "/"
-    if host in ("youtu.be", "m.youtube.com", "music.youtube.com"):  # same video, one item
-        host, path, extra = "youtube.com", "/watch", {"v": path.lstrip("/")} if host == "youtu.be" else {}
-    else:
-        extra = {}
-    drop = SITE_PARAMS.get(host, set())
-    query = sorted(({**extra, **dict(parse_qsl(p.query, keep_blank_values=True))}).items())
-    query = [(k, v) for k, v in query if not TRACKING.match(k) and k not in drop]
+    pairs = parse_qsl(p.query, keep_blank_values=True)
+    if host == "youtu.be":  # a share link for a video: the same item as its watch URL
+        host, path, pairs = "youtube.com", "/watch", [("v", path.lstrip("/"))] + [kv for kv in pairs if kv[0] != "v"]
+    elif host in ("m.youtube.com", "music.youtube.com"):  # same page, one item; the path still says which page
+        host = "youtube.com"
+    drop = SITE_PARAMS.get(host, set()) | (WATCH_PARAMS if host == "youtube.com" and path == "/watch" else set())
+    query = sorted((k, v) for k, v in pairs if not TRACKING.match(k) and k not in drop)
     return urlunsplit((p.scheme.lower(), host, path, urlencode(query), ""))
 
 

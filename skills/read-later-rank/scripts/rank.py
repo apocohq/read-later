@@ -41,7 +41,8 @@ WORDS_PER_MINUTE = 230
 NEWS_MAX_AGE_DAYS = 14
 WEIGHTS = {"relevance": 0.5, "quality": 0.5}
 RETRY_MAX = 3  # ingest.py stops fetching after this many attempts
-NOISE_PARAMS = re.compile(r"^(utm_|fbclid$|gclid$|mc_|ref$|source$|si$|nd$|dlsi$|s$|t$|list$|index$|feature$|start$|pp$|app$)")
+NOISE_PARAMS = re.compile(r"^(utm_|fbclid$|gclid$|mc_|ref$|source$|si$|nd$|dlsi$)")
+SITE_PARAMS = {"youtube.com": {"t", "start", "feature", "pp", "app"}, "x.com": {"t", "s"}, "twitter.com": {"t", "s"}}  # as in ingest.py
 
 
 def load_weights(path: Path) -> dict[str, int]:
@@ -98,12 +99,15 @@ def same_page(url: str) -> str:
     """A loose key for "the reader already has this one". ingest.py owns the real canonical form;
     this only has to match a Slack link against an item the reader saved from the browser."""
     p = urlsplit((url or "").strip())
-    host = (p.hostname or "").removeprefix("www.").removeprefix("m.")
+    host = (p.hostname or "").removeprefix("www.")
     path = p.path.rstrip("/") or "/"
-    pairs = dict(parse_qsl(p.query))
+    pairs = parse_qsl(p.query, keep_blank_values=True)
     if host == "youtu.be":
-        host, path, pairs = "youtube.com", "/watch", {"v": path.lstrip("/"), **pairs}
-    query = sorted((k, v) for k, v in pairs.items() if not NOISE_PARAMS.match(k))
+        host, path, pairs = "youtube.com", "/watch", [("v", path.lstrip("/"))] + [kv for kv in pairs if kv[0] != "v"]
+    elif host in ("m.youtube.com", "music.youtube.com"):
+        host = "youtube.com"
+    drop = SITE_PARAMS.get(host, set()) | ({"list", "index"} if host == "youtube.com" and path == "/watch" else set())
+    query = sorted((k, v) for k, v in pairs if not NOISE_PARAMS.match(k) and k not in drop)
     return urlunsplit(("", host, path, urlencode(query), "")).lstrip("/")
 
 
@@ -194,8 +198,10 @@ def main(argv: list[str]) -> int:
         ranked.append({"item": f"items/{p.parent.name}", "title": item.get("title"), "url": item["url"], "priority": round(priority, 2),
                        "minutes": minutes(item), "analysis": item["analysis"], **detail})
     needs += slack_skipped(root)
+    # Only a Slack row can be resolved this way: the reader saved the page from the browser, so it is an item now.
+    # A row about an item of our own (failed fetch, failed analysis) names that item and must stay.
     dropped = len(needs)
-    needs = [n for n in needs if same_page(n["url"]) not in have]
+    needs = [n for n in needs if n.get("kind") != "slack" or same_page(n["url"]) not in have]
     dropped -= len(needs)
     ranked.sort(key=lambda e: (-e["priority"], e["item"]))
     buckets = {"read_today": ranked[: args.today], "read_next": ranked[args.today : args.today + args.next_], "later": ranked[args.today + args.next_ :]}

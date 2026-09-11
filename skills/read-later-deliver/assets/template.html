@@ -235,7 +235,8 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       '<p class="hint" id="popup-blocked" hidden>Your browser blocked the tabs. Open the links one by one, or allow pop-ups for this page.</p>';
     // one gesture, one tab per link: the reader's loop is open → save again with the extension
     document.getElementById('open-all').addEventListener('click', () => {
-      const blocked = needs.map(n => window.open(n.url, '_blank', 'noopener')).some(w => !w);
+      // no 'noopener' feature: with it every browser returns null and we could not tell a blocked tab from an open one
+      const blocked = needs.map(n => { const w = window.open(n.url, '_blank'); if (w) w.opener = null; return w; }).some(w => !w);
       document.getElementById('popup-blocked').hidden = !blocked;
     });
     box.hidden = false;
