@@ -31,11 +31,12 @@ uv run scripts/ingest.py ~/work/read-later
 
 ## What it does, in order
 
-1. **Canonicalize and dedupe.** Strips fragment, `www.`, tracking params. The same page captured twice is one item with two capture records.
+1. **Canonicalize and dedupe.** Strips fragment, `www.`, tracking params, and per-host position or share params (`t`, `list` on YouTube; `t`, `s` on X); `youtu.be` and `m.youtube.com` become `youtube.com/watch?v=…`. The same page captured twice is one item with two capture records, whether or not the second link carries a timestamp.
 2. **Retract.** A `remove` event retracts captures of the same URL that came before it. Unprocessed ones are dropped; an already extracted item is archived and a line goes to `feedback.jsonl`. A `delete` event retracts the same way and then removes the item folder for good, wherever it is (`items/`, `done/`, `archive/`). Only a `delete` event deletes; the reader asked for it.
 3. **Extract.** Captured HTML → readability + markdownify → Markdown with headings, links, tables and images; title, author and date via trafilatura. Fallback: fetch the URL; an HTML response goes through the same extraction, a PDF (arXiv papers, reports) through PyMuPDF's layout analysis → Markdown with headings and tables, no OCR, no images; for arXiv the abstract page supplies title, authors and date. Fallback: the event's own `text`. Under 80 words counts as failure. A **video or audio page** (YouTube, Spotify, anything whose own Open Graph type is video or music) has no article: the item gets `kind`, `durationSeconds`, `image`, the channel or show as `author`, and the publisher's description as its content, however short. An article with an embedded clip stays an article.
 4. **Again.** Saving a page again reopens it if it was `done`. If the new capture carries HTML, the page is extracted again and the new text replaces the old one when it is clearly larger (twice the words, at least 100 more: a paywalled fetch replaced by the logged-in page) or when the analyzer had judged the old text `not-an-article`; the analysis is redone. An item with highlights keeps its text.
-5. **Save.** `items/<capturedAt>-<title slug>/item.json` and `content.md`. The HTML is not kept. The inbox file is deleted.
+5. **Title.** The tab title loses its unread counter (`(1) X`) and a trailing ` / X`, and is capped at 140 characters. A title that only names the site is not a title: the item then takes the browser tab's, else one derived from the text (first heading, or `<author> on X: <first sentence>`). A stored placeholder is replaced on the next capture.
+6. **Save.** `items/<capturedAt>-<title slug>/item.json` and `content.md`. The HTML is not kept. The inbox file is deleted.
 
 ## Marking an item as read or removing it from chat
 
