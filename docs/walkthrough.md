@@ -155,11 +155,19 @@ The document was re-cut along one rule: **the agent does everything an agent can
 
 Five corrections to INSTALL.md came out of the rehearsals: a web-fetch tool returns a *summary* of the raw URL, so section A now tells the agent to `curl` the file and read it from disk; the ingest skill's directory is named (`~/.claude/skills/read-later-ingest`), which cost the agent three tool calls of hunting; `dam file put` needs `--overwrite` the second time; the extension section says where to get the extension (clone, Node, pnpm) and how to mint its key from the CLI; and section E's custom-header connection, described as web-UI work, is one `dam connection connect custom-header` call. Two platform notes also went in: an `install_skill` call refused by the permission classifier passes on a retry, and `DAM_TOKEN` in the pod holds a `dummy-…` placeholder because the gateway substitutes the real key on the way out.
 
+## Step 11 · The library page saves to the agent  🚧 built, testing
+
+DAM shipped interactive artifacts: a private HTML artifact can call `platform.request`, which DAM relays to an HTTP server the agent runs on `127.0.0.1:5555`, and `platform.sendPrompt`, which sends a chat message. Deliver now publishes the page with `interactive: true` and runs `scripts/server.py`, a small standard-library server with five routes: `GET /health`, `GET /items`, `PUT /items/<folder>/highlights`, `PATCH /items/<folder>` (done or archived) and `DELETE /items/<folder>`. Highlights save as you make them; Done, Archive and Delete act at once. Where the bridge is missing or the server does not answer, the page says so, offers *Ask the agent to start it*, and falls back to the chat paste.
+
+Decisions: plain CRUD on items, not inbox events, because the three changes are small and the page needs an answer; the server mirrors ingest's rules for them and logs the same `feedback.jsonl` lines. The server is started with `platform-keep`, and a third schedule, `read-later-server`, runs `server.py --ensure` as its precheck every 30 minutes, so a dead server comes back without a model turn. Only create makes an artifact interactive, so the first deliver after the update publishes a new artifact; `render.py` reports the old id as `replaces`.
+
+Tested locally: every route and bad input (path traversal, wrong item, bad status, archived → done refused); a version change stops the old server and starts the new one; a Playwright run of the page against the real server with a mock bridge (17 checks: live saving, Done, Archive, two-click Delete, reload hides what changed, the banner and the prompt button when the server is down, no banner without the bridge).
+
 ## Where things stand
 
 - Steps 1-10 work end to end. The live host is now `read-later`, with the two schedules at 18:00 Prague and Sundays 09:00; guido keeps the skills but both of its read-later schedules are disabled.
-- Marking as read: *Mark as read* in the extension, or tell the agent in chat; either way it is a `done` event through ingest. The artifact cannot call the agent back until DAM ships its artifact bridge.
-- Highlights: the reader pane has a highlighter (toggle, select text, click a mark for a note or to remove it). Highlights stay in the browser until *Copy for chat* or *Done reading* puts the content of `highlights.json` on the clipboard and you paste it to the agent; the agent writes the file into the item folder verbatim (no ingest) and the next deliver shows them on every device. Until the bridge, that paste is the only path, so highlights made on one device reach another only after you have sent them. In DAM's viewer they also do not survive a reload, so send before you leave; a DAM change for storage is the next step.
+- Marking as read: *Done reading* in the library page, *Mark as read* in the extension, or tell the agent in chat.
+- Highlights: the reader pane has a highlighter (toggle, select text, click a mark for a note or to remove it). In the preview beside the agent's chat they save to `highlights.json` as you make them (step 11). Elsewhere, *Copy for chat* or *Done reading* puts the file on the clipboard and you paste it to the agent.
 - Open polish, all small: the analyzer files engineering-flavoured agent pieces under `ai-and-agents`; every topic weight is still 5 until you or the host agent sets them; `first-reader` has a stray `context.md` and `index.json` from earlier versions, harmless.
 
 ## Next
@@ -167,6 +175,6 @@ Five corrections to INSTALL.md came out of the rehearsals: a web-fetch tool retu
 1. Point the extension at `read-later` (new key bound to it) and use *Mark as read* for a week; check that `done/` fills and Tonight changes.
 2. Watch the first refresh on the new agent: the reweigh should report which weights it changed from guido's files, not "no context".
 3. Feed what you finish reading back into the weights (topics of `done/` items drift up).
-4. When DAM's artifact bridge ships: the page sends the highlight event itself, on every change. One transport function in the template, nothing on the agent.
+4. Finish step 11 on `read-later`: publish the interactive page, delete the old artifact, use it for a week.
 5. Use Save for later in Slack for a week; tune the drop and skip lists in `slack.py` if noise gets through. Then the multi-user template; a name.
 
