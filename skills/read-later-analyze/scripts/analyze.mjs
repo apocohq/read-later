@@ -14,7 +14,7 @@
  *
  * Options:
  *   --connection <id|name>  model connection to hand the Invocation (required unless in analyze.json)
- *   --template <id>         image template (default: the first one matching /claude/)
+ *   --template <name>       harness the Invocations run on, or an image id (default: claude-code)
  *   --concurrency <n>       parallel Invocations (default 3)
  *   --ttl-minutes <n>       per-Invocation deadline (default 10)
  *   --max-words <n>         truncate the article beyond this (default 8000)
@@ -213,9 +213,13 @@ async function main() {
   const connection = connections.find((c) => c.id === opts.connection || c.name === opts.connection);
   if (!connection) fail(`connection ${opts.connection} is not granted to this agent. Available: ${avail}`);
   const images = await sdk.listImages();
-  const template = opts.template ? images.find((i) => i.id === opts.template) : images.find((i) => /claude/i.test(i.id));
-  if (!template) fail(`no usable template${opts.template ? ` ${opts.template}` : " matching /claude/"}. Available: ${images.map((i) => i.id).join(", ")}`);
-  log(`invocations: template ${template.id}, connection ${connection.name} only, ${Math.min(opts.concurrency, items.length)} in parallel, ${opts.ttlMinutes} min deadline`);
+  // Images now carry a harness (one "default" image runs several); older platforms named a Claude image by its id.
+  const want = opts.template ?? "claude-code";
+  const template = images.find((i) => i.harness === want) ?? images.find((i) => i.id === want) ?? (opts.template ? null : images.find((i) => /claude/i.test(i.id)));
+  if (!template) fail(`no usable template ${want}. Available: ${images.map((i) => i.harness ?? i.id).join(", ")}`);
+  const runsOn = template.harness ? { harness: template.harness } : { template: template.id, image: template.image };
+  const templateName = template.harness ?? template.id;
+  log(`invocations: template ${templateName}, connection ${connection.name} only, ${Math.min(opts.concurrency, items.length)} in parallel, ${opts.ttlMinutes} min deadline`);
 
   let ok = 0, failed = 0, streak = 0, tripped = false;
   const coined = [];
@@ -225,14 +229,14 @@ async function main() {
       const started = Date.now();
       try {
         const result = await sdk.spawn({
-          template: template.id,
+          ...runsOn,
           connections: [connection.id],
           prompt: buildPrompt(it, prompts, vocab, opts.maxWords),
           schema,
           label: `analyze:${it.folder.slice(0, 40)}`,
           ttlMs: opts.ttlMinutes * 60_000,
         });
-        const item = { ...it.item, status: "analyzed", analysis: { version: ANALYSIS_VERSION, at: now(), template: template.id, connection: connection.name, ...result } };
+        const item = { ...it.item, status: "analyzed", analysis: { version: ANALYSIS_VERSION, at: now(), template: templateName, connection: connection.name, ...result } };
         delete item.analysisError;
         writeFileSync(join(it.dir, "item.json"), JSON.stringify(item, null, 2) + "\n");
         coined.push(...result.topics.filter((t) => !vocab.topics.includes(t)));
