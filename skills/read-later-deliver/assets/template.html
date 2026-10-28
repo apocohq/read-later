@@ -182,6 +182,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
     <div class="controls" id="controls">
       <span class="topics" id="topics"></span>
       <input type="search" id="q" placeholder="Search title, topic, text" aria-label="Search">
+      <button type="button" class="chip" id="refresh" hidden title="Ask your agent to run the refresh now: Slack, ingest, analyze, rank, publish">Refresh</button>
     </div>
   </header>
   <section class="conn" id="conn" role="status" hidden></section>
@@ -497,8 +498,10 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
     }
     function ask(text){ try { bridge.sendPrompt(text); return true; } catch { return false; } }
     const askToStart = () => ask('Read later: the library page cannot reach its server. Start it with the read-later-deliver skill (server.py --ensure ~/work/read-later), then tell me whether it answers.');
+    // the nightly schedule's task, word for word, so a click does exactly what 18:00 does
+    const askToRefresh = () => ask('Read later: refresh requested from the library page. Read-later refresh. State dir ~/work/read-later. Use the installed skills in this order, and only these: read-later-slack (run its script; skip the skill if it reports no Slack connection), read-later-ingest (with UV_CACHE_DIR=~/work/.cache/uv), read-later-analyze (pass only the model connection), read-later-rank (reweigh from context.md first), read-later-deliver. Report each script output briefly and the artifact link. Do not open articles.');
     const askToRepublish = () => ask('Read later: the library page is out of date. Run the read-later-deliver skill to render and publish it again, and give me the link.');
-    return { mode: () => mode, why: () => why, stale: () => stale, connect, saveSoon, save, act, fail, pending, askToStart, askToRepublish,
+    return { mode: () => mode, why: () => why, stale: () => stale, connect, saveSoon, save, act, fail, pending, askToStart, askToRepublish, askToRefresh, bridged: !!bridge,
       set onMode(f){ onMode = f; }, set onSaved(f){ onSaved = f; } };
   })();
   hlChanged = it => LIVE.saveSoon(it);
@@ -687,6 +690,15 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
     if (a === 'retry') LIVE.connect();
     if (a === 'republish') toast(LIVE.askToRepublish() ? 'Asked the agent in the chat. It replies with the new version.' : 'Could not reach the chat. Ask the agent to republish the read-later page.');
     if (a === 'start') toast(LIVE.askToStart() ? 'Asked the agent in the chat. Retry when it says the server answers.' : 'Could not reach the chat. Ask the agent to start the read-later server.');
+  });
+  // Refresh: only where the bridge can reach the chat. The agent works in that chat and replies with the link.
+  const refreshBtn = document.getElementById('refresh');
+  refreshBtn.hidden = !LIVE.bridged;
+  refreshBtn.addEventListener('click', () => {
+    if (!LIVE.askToRefresh()) return toast('Could not reach the chat. Ask the agent to run the read-later refresh.');
+    refreshBtn.disabled = true; refreshBtn.textContent = 'Refreshing…';
+    toast('Asked the agent in the chat. It replies with the new version when the refresh is done.');
+    setTimeout(() => { refreshBtn.disabled = false; refreshBtn.textContent = 'Refresh'; }, 120000);  // one click per two minutes
   });
   subline();
   LIVE.connect();
