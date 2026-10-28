@@ -40,7 +40,7 @@ Report the script's output in one or two lines: how many links were captured and
 
 - **Read only.** The script calls two read-only Slack tools and refuses others. Never use your own Slack tools to send, react, schedule or draft anything as part of this skill.
 - Never write inbox files by hand for Slack links; run the script, so `slack/state.json` stays honest about what was seen.
-- If the script fails to start (no Slack connection, MCP error, rate limit), report that and continue the refresh with `read-later-ingest`; do not read Slack by hand with your own tools.
+- If the script fails to start (no Slack connection, MCP error, rate limit) or exits 3 because Slack ignored `is:saved`, report that and continue the refresh with `read-later-ingest`; do not read Slack by hand with your own tools.
 
 ## Files
 
