@@ -16,6 +16,11 @@ the script only speaks MCP to https://mcp.slack.com/mcp. It calls two read-only 
 and nothing else (see ALLOWED_TOOLS). Slack text never reaches the agent; the poster's
 words travel as the event's `note`.
 
+Guard: Slack's search has at times ignored `is:saved` and returned every message with a link
+(October 2026: about 200 unsaved links in three weeks, mostly bots). So the script first reads one
+page of `has:link` without the filter; if the saved search returns the same messages, it captures
+nothing and exits 3 with the reason.
+
 Standard library only. Exit codes: 0 ran, 2 bad arguments, 3 STATE_DIR or Slack unusable.
 """
 
@@ -324,6 +329,13 @@ def collect(hits: list[dict], me: dict, known: set[str], seen: dict) -> tuple[li
     return list(captures.values()), list(skipped.values())
 
 
+def ignores_saved(saved: list[dict], unfiltered: list[dict]) -> bool:
+    """True when the saved search's first page is the same messages as the newest messages with a link: the filter did nothing."""
+    key = lambda hits: [(h.get("channelId"), h.get("ts")) for h in hits[:PAGE]]
+    first = key(unfiltered)
+    return len(first) >= 5 and key(saved)[:len(first)] == first
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="slack.py", description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter,
                                  epilog="Exit codes: 0 ran, 2 bad arguments, 3 STATE_DIR or Slack unusable.")
@@ -348,11 +360,16 @@ def main(argv: list[str]) -> int:
         slack = Slack(args.mcp_url)
         me = state.get("me") or slack.me()
         hits = slack.search("is:saved has:link", args.pages)
+        unfiltered = slack.search("has:link", 1)
     except SystemExit as e:
         if isinstance(e.code, str):
             log(e.code)
             return 3
         raise
+    if ignores_saved(hits, unfiltered):
+        log("error: Slack's search ignored is:saved (the saved search returned the same messages as an unfiltered one), "
+            "so it cannot tell what the reader saved. Captured nothing. Report this; do not read Slack another way.")
+        return 3
     log(f"{me['name']} ({me['id']}): {len(hits)} saved message(s) with links")
 
     known = known_urls(root)
