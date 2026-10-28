@@ -12,7 +12,7 @@ Keeps the live pool small and the vocabulary clean. Two parts: a script that mov
 
 ## Available scripts
 
-- **`scripts/prune.py`** — moves item folders out of `items/`. `--dry-run` to preview, `--max-age-days` to change the staleness rule (default 30).
+- **`scripts/prune.py`** — moves item folders out of `items/`. `--dry-run` to preview, `--max-age-days` to change the staleness rule (default 90).
 
 ## Run
 
@@ -22,7 +22,7 @@ From this skill's directory:
 python3 scripts/prune.py ~/work/read-later
 ```
 
-Rules, in order: status `done` → `done/`; status `archived` (the reader un-bookmarked it) → `archive/`; `contentType` `not-an-article` → `archive/`; unread for more than 30 days and not must-read → `archive/`. Prune deletes nothing; each move is logged to `feedback.jsonl`. Only a `delete` event through `read-later-ingest` removes a folder. `rank` reads only `items/`, so anything moved leaves the queue.
+Rules, in order: status `done` → `done/`; status `archived` (the reader un-bookmarked it) → `archive/`; `contentType` `not-an-article` → `archive/`; unread for more than 90 days and not must-read → `archive/`. Prune deletes nothing; each move is logged to `feedback.jsonl`. Only a `delete` event through `read-later-ingest` removes a folder. `rank` reads only `items/`, so anything moved leaves the queue.
 
 ## Then tidy the vocabulary
 

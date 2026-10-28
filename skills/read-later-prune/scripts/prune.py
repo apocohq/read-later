@@ -8,7 +8,7 @@ Folders under STATE_DIR:
     items/     the live pool; rank reads only this
     done/      items the reader finished (status "done")
     archive/   items dropped: un-bookmarked (status "archived"), not-an-article,
-               or unread for more than --max-age-days (default 30) and not must-read
+               or unread for more than --max-age-days (default 90) and not must-read
 
 Moves whole item folders; never deletes anything. Appends one line per move to
 feedback.jsonl. Exit codes: 0 ran, 2 bad arguments, 3 STATE_DIR not usable.
@@ -23,7 +23,7 @@ import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-DEFAULT_MAX_AGE_DAYS = 30
+DEFAULT_MAX_AGE_DAYS = 90  # about three months
 
 
 def first_capture(item: dict) -> date | None:

@@ -140,7 +140,7 @@ For a PDF the Markdown comes from PyMuPDF's layout analysis: headings by level, 
 
 ## Folders
 
-`items/` is the live pool and the only folder `rank` reads. `read-later-prune` moves whole item folders to `done/` (status `done`) or `archive/` (status `archived`, `not-an-article`, or unread for 30 days and not must-read). Nothing is deleted by prune; only a `delete` event removes a folder, and it works in all three.
+`items/` is the live pool and the only folder `rank` reads. `read-later-prune` moves whole item folders to `done/` (status `done`) or `archive/` (status `archived`, `not-an-article`, or unread for 90 days and not must-read). Nothing is deleted by prune; only a `delete` event removes a folder, and it works in all three.
 
 ## Slack state — `slack/`
 
