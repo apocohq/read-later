@@ -2,7 +2,7 @@
 
 One agent, six skills, one Chrome extension, two schedules, one start-up hook, and optionally Slack. The short way is section A: the agent installs all of it on itself and hands you a list of the few things an agent cannot do. Section B is the same work by hand, from the CLI. Section C is the extension, section D Slack, section E the reader's context when it lives on another agent.
 
-**What only a human can do**, because the platform gives no agent the power: create the agent, grant it a connection, change its network rules, restart it, register the skill source, mint an API key, load the extension in a browser, and turn on *Interactive artifacts* in their own DAM settings. That is the whole list. Everything else — skills, folders, the context file, dependencies, schedules, the start-up hook, the DAM CLI on the agent — the agent does for itself, and it tells you exactly which of the above it still needs.
+**What only a human can do**, because the platform gives no agent the power: create the agent, grant it a connection, change its network rules, restart it, register the skill source, mint an API key, choose the harness the agent's sessions run on, load the extension in a browser, and turn on *Interactive artifacts* in their own DAM settings. That is the whole list. Everything else — skills, folders, the context file, dependencies, schedules, the start-up hook, the DAM CLI on the agent — the agent does for itself, and it tells you exactly which of the above it still needs.
 
 ## 0. Before either way (owner, once)
 
@@ -41,7 +41,7 @@ If you are the agent reading this, do these in order and report at the end. Do n
    - You know nothing about the reader and the owner named no agent: write the single line `NO CONTEXT AVAILABLE`, and say in the report that one sentence about the reader, or the name of an agent that holds their files, is all you need to do better.
 6. **Dependencies.** From the ingest skill's directory (`~/.claude/skills/read-later-ingest`) run `UV_CACHE_DIR=~/work/.cache/uv uv run scripts/ingest.py ~/work/read-later` once. The inbox is empty, so it only downloads the Python packages (about 30 MB; PyMuPDF for PDFs, another 250 MB, comes with the first PDF) and prints `done: 0 extracted, 0 failed`. If it prints `mise` lines and hangs, stop and tell the owner the two network rules from section 0 are missing.
 7. **Schedules.** Call `create_schedule` twice with the exact names, tasks and times from [Schedules](#schedules). Use the owner's timezone if you know it, otherwise `Europe/Prague`. Fresh session each tick. If a schedule with the same name already exists, leave it.
-8. **Start-up hook.** Merge the hook from [Start-up hook](#start-up-hook) into `~/work/.claude/settings.json` (make the file if it is missing; keep any other keys and hooks there). Then start the library page's server once: run the hook's command without the redirect; it prints `"running": true`.
+8. **Start-up hook.** Merge the hook from [Start-up hook](#start-up-hook) into `~/work/.claude/settings.json` (make the file if it is missing; keep any other keys and hooks there). Then start the library page's server once: run the hook's command without the redirect; it prints `"running": true`. The hook is a Claude Code hook, so check `~/.platform/session-defaults.json`: if `chat`, `channel` or `scheduled` names another harness, put the switch command from [Start-up hook](#start-up-hook) in your report, filled in.
 9. **Git.** If `~/work` is a git repository, make sure `.gitignore` covers `read-later/inbox/`, `read-later/items/`, `read-later/done/` and `read-later/archive/`; keep `topics.md`, `context.md` and `feedback.jsonl` versioned.
 10. **Report and stop.** Two short lists. First, what you did, in one line each. Second, **what is left for the owner**, as commands they can paste, and nothing else — typically only:
 
@@ -49,7 +49,7 @@ If you are the agent reading this, do these in order and report at the end. Do n
    dam auth token create --name read-later-ext --scope agents:operate agents:read --agent <this agent's id>
    ```
 
-   Your own agent id is in `$PLATFORM_MCP_URL` (`…/api/agents/<id>/mcp`), so fill it in; the owner should have to type nothing they can avoid. Then: turning on *Interactive artifacts* (section 0), building the extension in their browser (section C), any missing grant you found in step 2, and the three section E commands if you prepared that. Do not ask them for a folder, a file, a package or a schedule: those are yours, and you did them. Do not run analyze, rank or deliver now; there is nothing to process, and the first refresh does it. Topic weights need no owner either: the reweigh sets them from the reader's context on every run, and the owner can overrule any weight in `topics.md` whenever they like.
+   Your own agent id is in `$PLATFORM_MCP_URL` (`…/api/agents/<id>/mcp`), so fill it in; the owner should have to type nothing they can avoid. Then: turning on *Interactive artifacts* (section 0), building the extension in their browser (section C), any missing grant you found in step 2, the harness switch from step 8 if it was needed, and the three section E commands if you prepared that. Do not ask them for a folder, a file, a package or a schedule: those are yours, and you did them. Do not run analyze, rank or deliver now; there is nothing to process, and the first refresh does it. Topic weights need no owner either: the reweigh sets them from the reader's context on every run, and the owner can overrule any weight in `topics.md` whenever they like.
 
 ## B. From the CLI
 
@@ -245,7 +245,13 @@ The library page saves through a small server on the agent (`127.0.0.1:5555`). N
 }
 ```
 
-It does nothing when the server already runs, restarts it when the skill was updated, and never stops a session from starting. Between a restart and the next session the page says it cannot reach the server and offers a button that asks the agent to start it. The hook sits in the work folder, not in `~/.claude/settings.json`, because the platform writes that file too.
+It runs only in **Claude Code** sessions; other harnesses ignore it. A new agent may start its sessions on another harness (`~/.platform/session-defaults.json` says which). The owner switches all three kinds with CLI 0.2.24 or later (or on the agent's Providers page):
+
+```sh
+for k in chat channel scheduled; do dam agent update <agent> --harness claude-code --model <provider>/<model id> --kind $k; done
+```
+
+The hook does nothing when the server already runs, restarts it when the skill was updated, and never stops a session from starting. Between a restart and the next session the page says it cannot reach the server and offers a button that asks the agent to start it. The hook sits in the work folder, not in `~/.claude/settings.json`, because the platform writes that file too.
 
 ## Check the install
 
