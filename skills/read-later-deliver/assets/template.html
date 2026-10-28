@@ -47,6 +47,12 @@ input[type=search]{border:1px solid var(--line);background:var(--paper);color:va
 .attention li a{color:var(--accent);text-decoration:none}.attention li a:hover{text-decoration:underline}
 .attention .hint{margin:0;font-size:12.5px;color:var(--ink3)}
 
+/* the agent's server is not reachable */
+.conn[hidden]{display:none}
+.conn{border:1px solid var(--line);border-radius:8px;padding:10px 16px;margin:0 0 8px;display:flex;gap:10px 16px;align-items:center;flex-wrap:wrap;background:var(--paper);font-size:13.5px;color:var(--ink2)}
+.conn p{margin:0;flex:1;min-width:240px}.conn b{color:var(--ink)}
+.conn .row{display:flex;gap:6px}
+
 /* shelves */
 .shelf{margin-top:34px}
 .shelf h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);margin:0 0 14px;display:flex;gap:10px;align-items:baseline}
@@ -178,6 +184,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       <input type="search" id="q" placeholder="Search title, topic, text" aria-label="Search">
     </div>
   </header>
+  <section class="conn" id="conn" role="status" hidden></section>
   <section class="attention" id="attention" hidden></section>
   <section class="shelf" id="s-read_today"><h2>Tonight <small id="n-read_today"></small></h2><div class="grid"></div></section>
   <section class="shelf" id="s-read_next"><h2>Next <small id="n-read_next"></small></h2><div class="grid"></div></section>
@@ -226,7 +233,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
   // overall score: rank's priority, 0-10 (must-read can push it over, so clamp), two decimals
   const score10 = v => v == null ? '–' : Math.max(0, Math.min(10, Number(v))).toFixed(2);
 
-  document.getElementById('sub').textContent = `${items.length} saved · generated ${(DATA.generatedAt||'').replace('T',' ').replace(/:\d\d(\.\d+)?Z$/,' UTC')}`;
+  const subline = () => { document.getElementById('sub').textContent = `${items.filter(it => !it.gone).length} saved · generated ${(DATA.generatedAt||'').replace('T',' ').replace(/:\d\d(\.\d+)?Z$/,' UTC')}${LIVE.mode() === 'live' ? ' · saves to your agent' : ''}`; };
 
   // what the reader has to look at themselves: fetch failures and analyses that keep failing
   (function(){
@@ -276,7 +283,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
     for (const key of ['read_today','read_next','later']){
       const sec = document.getElementById('s-'+key), grid = sec.querySelector('.grid');
       grid.innerHTML = '';
-      const rows = items.filter(it => it.bucket===key && (filter==='all' || (it.topics||[]).includes(filter)) && (!q || [it.title, it.tldr, (it.topics||[]).join(' '), it.category, it.markdown, HL.current(it).map(h => h.exact+' '+(h.note||'')).join(' ')].join(' ').toLowerCase().includes(q)));
+      const rows = items.filter(it => !it.gone && it.bucket===key && (filter==='all' || (it.topics||[]).includes(filter)) && (!q || [it.title, it.tldr, (it.topics||[]).join(' '), it.category, it.markdown, HL.current(it).map(h => h.exact+' '+(h.note||'')).join(' ')].join(' ').toLowerCase().includes(q)));
       document.getElementById('n-'+key).textContent = rows.length ? `${rows.length}` : '';
       sec.style.display = (filter==='all' || rows.length) ? '' : 'none';
       if (!rows.length){ grid.insertAdjacentHTML('beforeend', `<div class="empty">${q ? 'No match.' : 'Nothing here.'}</div>`); continue; }
@@ -323,6 +330,8 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
     return out.join('\n');
   }
 
+  let hlChanged = () => {};  // set below: in live mode every edit is saved to the agent's server
+
   // --- highlights: kept in this browser while reading, sent to the agent as one JSON object ---
   // Anchors are W3C TextQuoteSelector (exact/prefix/suffix) plus TextPositionSelector (start/end) into the article's textContent.
   const HL = (() => {
@@ -357,13 +366,13 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       return [...synced(it).filter(h => !gone.has(h.id)), ...st.added].sort((a,b) => (a.start ?? 0) - (b.start ?? 0));
     }
     const isLocal = (it, id) => !synced(it).some(h => h.id === id);
-    function add(it, h){ const st = state(it); st.added.push(h); save(it, st); }
-    function remove(it, id){ const st = state(it); st.added = st.added.filter(h => h.id !== id); if (!st.deleted.some(d => d.id === id)) st.deleted.push({id, at: Date.now()}); save(it, st); }
+    function add(it, h){ const st = state(it); st.added.push(h); save(it, st); hlChanged(it); }
+    function remove(it, id){ const st = state(it); st.added = st.added.filter(h => h.id !== id); if (!st.deleted.some(d => d.id === id)) st.deleted.push({id, at: Date.now()}); save(it, st); hlChanged(it); }
     function setNote(it, id, note){
       const st = state(it); const mine = st.added.find(h => h.id === id);
       if (mine){ if (note) mine.note = note; else delete mine.note; }
       else { const src = synced(it).find(h => h.id === id); if (!src) return; const copy = {...src, id: newId('h')}; if (note) copy.note = note; else delete copy.note; st.added.push(copy); if (!st.deleted.some(d => d.id === id)) st.deleted.push({id, at: Date.now()}); }
-      save(it, st);
+      save(it, st); hlChanged(it);
     }
     const newId = (p='h') => p + '-' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-3);
 
@@ -408,8 +417,8 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       for (const m of root.querySelectorAll(`mark.hl[data-id="${cssEsc(id)}"]`)){ const parent = m.parentNode; while (m.firstChild) parent.insertBefore(m.firstChild, m); m.remove(); parent.normalize(); }
     }
     function restyle(root, it, id){ const h = current(it).find(x => x.id === id); root.querySelectorAll(`mark.hl[data-id="${cssEsc(id)}"]`).forEach(m => h && decorate(m, it, h)); }
-    // --- outbox: the payload is highlights.json itself. Today it goes to the clipboard and the reader pastes it to the agent,
-    // which writes it into the item folder verbatim; later the artifact writes the file. "done" adds one line for the agent.
+    // --- outbox: the payload is highlights.json itself. In live mode the page PUTs it to the agent's server; otherwise it goes
+    // to the clipboard and the reader pastes it to the agent, which writes it into the item folder verbatim. "done" adds one line.
     const file = it => ({ item: it.id, url: it.url, updatedAt: new Date().toISOString(), highlights: current(it).map(({id, exact, prefix, suffix, start, end, color, note, createdAt}) => ({id, exact, prefix, suffix, start, end, ...(color ? {color} : {}), ...(note ? {note} : {}), createdAt})) });
     // A page that never saw any highlights, synced or local, sends no file at all, so a "done" from a stale browser cannot wipe what another device sent.
     const payload = (it, action) => {
@@ -425,9 +434,74 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       async (text, action, ui) => { try { await navigator.clipboard.writeText(text); ui.toast(action === 'done' ? 'Copied. Paste it to your agent to finish this article.' : action === 'remove' ? 'Copied. Paste it to your agent to archive this article.' : action === 'delete' ? 'Copied. Paste it to your agent to delete this article.' : 'Copied. Paste it to your agent.'); } catch { ui.fallback(text); } return true; },
     ];
     async function emit(it, action, ui){ const text = payload(it, action); for (const t of transports) if (await t(text, action, ui)) return text; return null; }
-    function setColorOf(it, id, color){ const st = state(it); const mine = st.added.find(h => h.id === id); if (mine){ mine.color = color; save(it, st); return; } const src = synced(it).find(h => h.id === id); if (!src) return; st.added.push({...src, id: newId('h'), color}); if (!st.deleted.some(d => d.id === id)) st.deleted.push({id, at: Date.now()}); save(it, st); }
-    return { current, isLocal, add, remove, setNote, setColorOf, fromSelection, apply, applyOne, unwrap, restyle, emit, cssEsc, COLORS, getColor, setColor, storageOk: () => storageOk };
+    function setColorOf(it, id, color){ const st = state(it); const mine = st.added.find(h => h.id === id); if (mine){ mine.color = color; save(it, st); hlChanged(it); return; } const src = synced(it).find(h => h.id === id); if (!src) return; st.added.push({...src, id: newId('h'), color}); if (!st.deleted.some(d => d.id === id)) st.deleted.push({id, at: Date.now()}); save(it, st); hlChanged(it); }
+    return { current, isLocal, add, remove, setNote, setColorOf, fromSelection, apply, applyOne, unwrap, restyle, emit, file, cssEsc, COLORS, getColor, setColor, storageOk: () => storageOk };
   })();
+
+  // --- the agent's server, through DAM's artifact bridge (window.platform, which DAM injects into interactive pages) ---
+  // live: highlights save as you go, Done, Archive and Delete act at once. Otherwise each one goes to the agent as a chat paste.
+  const LIVE = (() => {
+    const bridge = window.platform && typeof window.platform.request === 'function' ? window.platform : null;
+    let mode = bridge ? 'checking' : 'off', why = '', stale = false, onMode = () => {}, onSaved = () => {};
+    const timers = {}, inflight = {};
+    const REASONS = {'app-not-listening': 'the server is not running', 'timeout': 'no answer', 'not-allowed': 'this view cannot call the agent', 'agent-unreachable': 'the agent is not reachable', 'unsupported-runtime': 'the agent is too old for this', 'too-many-requests': 'too many requests at once'};
+    const reasonText = r => REASONS[r] || r || 'unknown error';
+    const path = it => '/items/' + encodeURIComponent(it.id);
+    async function call(method, url, body, ms){
+      const req = bridge.request({method, path: url, ...(body === undefined ? {} : {body: JSON.stringify(body)})});
+      // DAM's own wait is 3 minutes (it may wake the agent); the first call gives up sooner, the agent is meant to be awake
+      const res = await (ms ? Promise.race([req, new Promise((_, no) => setTimeout(() => no(Object.assign(new Error('timeout'), {reason: 'timeout'})), ms))]) : req);
+      let doc = null; try { doc = res.body ? JSON.parse(res.body) : null; } catch {}
+      if (res.status >= 400) throw Object.assign(new Error((doc && doc.error) || 'HTTP ' + res.status), {status: res.status});
+      return doc;
+    }
+    // An HTTP error is the server refusing one request; anything else means the bridge or the server is gone: back to chat pastes.
+    function fail(err){
+      if (err && err.status) return err.message;
+      mode = 'down'; why = reasonText(err && err.reason); onMode();
+      return why;
+    }
+    async function connect(){
+      if (!bridge) return;
+      mode = 'checking'; why = ''; onMode();
+      try {
+        const doc = await call('GET', '/items', undefined, 10000) || {}, known = doc.items || {};
+        stale = !!(doc.template && DATA.template && doc.template !== DATA.template);  // the skill on the agent has a newer template
+        for (const it of items){
+          const s = known[it.id];
+          if (!s || s.status === 'done' || s.status === 'archived') it.gone = true;  // finished, archived or deleted since this version was published
+          else it.highlights = Array.isArray(s.highlights) ? s.highlights : [];
+        }
+        mode = 'live';
+        for (const it of items) if (!it.gone && HL.current(it).some(h => HL.isLocal(it, h.id))) saveSoon(it);  // edits kept in this browser before
+      } catch (err){ mode = 'down'; why = reasonText(err && (err.reason || err.message)); }
+      onMode();
+    }
+    // Half a second after the last edit, one save per item at a time; what the server took becomes the page's synced set.
+    function saveSoon(it){ if (mode !== 'live') return; clearTimeout(timers[it.id]); timers[it.id] = setTimeout(() => save(it).catch(() => {}), 500); }
+    async function save(it){
+      clearTimeout(timers[it.id]); delete timers[it.id];
+      if (inflight[it.id]) await inflight[it.id].catch(() => {});
+      const doc = HL.file(it), p = call('PUT', path(it) + '/highlights', doc);
+      inflight[it.id] = p;
+      let err = null;
+      try { await p; it.highlights = doc.highlights; } catch (e) { err = e; }
+      if (inflight[it.id] === p) delete inflight[it.id];
+      onSaved(it, err && fail(err));
+      if (err) throw err;
+    }
+    const pending = it => !!(timers[it.id] || inflight[it.id]);
+    async function act(it, action){
+      if (pending(it)) await save(it);
+      return action === 'delete' ? call('DELETE', path(it)) : call('PATCH', path(it), {status: action === 'done' ? 'done' : 'archived'});
+    }
+    function ask(text){ try { bridge.sendPrompt(text); return true; } catch { return false; } }
+    const askToStart = () => ask('Read later: the library page cannot reach its server. Start it with the read-later-deliver skill (server.py --ensure ~/work/read-later), then tell me whether it answers.');
+    const askToRepublish = () => ask('Read later: the library page is out of date. Run the read-later-deliver skill to render and publish it again, and give me the link.');
+    return { mode: () => mode, why: () => why, stale: () => stale, connect, saveSoon, save, act, fail, pending, askToStart, askToRepublish,
+      set onMode(f){ onMode = f; }, set onSaved(f){ onSaved = f; } };
+  })();
+  hlChanged = it => LIVE.saveSoon(it);
 
   const toastEl = document.getElementById('toast'); let toastTimer;
   function toast(msg){ toastEl.textContent = msg; toastEl.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), 3200); }
@@ -471,7 +545,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
     mountHighlights(it);
     setHash('#'+encodeURIComponent(it.id||''));
   }
-  function close(){ reader.classList.remove('open'); document.body.style.overflow = ''; setHash(''); closePop(); hlOn = false; }
+  function close(){ refreshOpen = null; reader.classList.remove('open'); document.body.style.overflow = ''; setHash(''); closePop(); hlOn = false; }
   // The artifact viewer renders this page in a sandboxed about:srcdoc frame (opaque origin) where History and Storage throw; both are conveniences here.
   function setHash(h){ try { history.replaceState(null, '', h || location.pathname); } catch {} }
 
@@ -488,32 +562,51 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       article.classList.toggle('hl-on', hlOn);
     }
     function renderTools(){
-      const list = HL.current(it), color = HL.getColor();
+      const list = HL.current(it), color = HL.getColor(), live = LIVE.mode() === 'live';
       tools.innerHTML = `
         <button class="ibtn" id="hl-toggle" data-c="${color}" aria-pressed="${hlOn}" title="${hlOn ? 'Highlighter on' : 'Highlighter off'}" aria-label="Highlighter">${PEN}</button>
         ${hlOn ? `<span class="swatches" role="radiogroup" aria-label="Highlight color">${HL.COLORS.map(c => `<button class="sw" data-c="${c}" aria-pressed="${c === color}" title="${c}" aria-label="${c}"></button>`).join('')}</span>` : ''}
         <span class="sep"></span>
-        <button class="chip" id="hl-copy" ${list.length ? '' : 'disabled'} title="Copy highlights.json for your agent">Copy for chat</button>
-        <button class="chip" id="hl-done" title="Copy a done message, with the highlights, for your agent">Done reading</button>
-        <button class="chip" id="hl-remove" title="Copy a message asking your agent to archive this article (it leaves the queue, the folder stays)">Archive</button>
-        <button class="chip danger" id="hl-delete" title="Copy a message asking your agent to delete this article for good">Delete</button>`;
+        ${live ? '' : `<button class="chip" id="hl-copy" ${list.length ? '' : 'disabled'} title="Copy highlights.json for your agent">Copy for chat</button>`}
+        <button class="chip" id="hl-done" title="${live ? 'Mark it as read; it leaves the queue' : 'Copy a done message, with the highlights, for your agent'}">Done reading</button>
+        <button class="chip" id="hl-remove" title="${live ? 'Archive it: it leaves the queue, the folder stays' : 'Copy a message asking your agent to archive this article (it leaves the queue, the folder stays)'}">Archive</button>
+        <button class="chip danger" id="hl-delete" title="${live ? 'Delete it for good, with its highlights' : 'Copy a message asking your agent to delete this article for good'}">Delete</button>`;
       tools.querySelector('#hl-toggle').addEventListener('click', () => { hlOn = !hlOn; closePop(); article.classList.toggle('hl-on', hlOn); renderTools(); renderPanel(); });
       tools.querySelectorAll('.sw').forEach(b => b.addEventListener('click', () => { HL.setColor(b.dataset.c); renderTools(); }));
-      tools.querySelector('#hl-copy').addEventListener('click', () => HL.emit(it, 'highlight', ui));
-      tools.querySelector('#hl-done').addEventListener('click', () => HL.emit(it, 'done', ui));
-      tools.querySelector('#hl-remove').addEventListener('click', () => HL.emit(it, 'remove', ui));
-      tools.querySelector('#hl-delete').addEventListener('click', () => HL.emit(it, 'delete', ui));
+      tools.querySelector('#hl-copy')?.addEventListener('click', () => HL.emit(it, 'highlight', ui));
+      for (const [id, action] of [['#hl-done', 'done'], ['#hl-remove', 'remove'], ['#hl-delete', 'delete']]){
+        const b = tools.querySelector(id);
+        b.addEventListener('click', () => LIVE.mode() === 'live' ? liveAct(action, b) : HL.emit(it, action, ui));
+      }
+    }
+    // The frame has no confirm(), so Delete asks for a second click.
+    async function liveAct(action, b){
+      if (action === 'delete' && b.dataset.armed !== '1'){
+        b.dataset.armed = '1'; b.textContent = 'Click again to delete';
+        setTimeout(() => { if (b.isConnected){ b.dataset.armed = ''; b.textContent = 'Delete'; } }, 4000);
+        return;
+      }
+      tools.querySelectorAll('.chip').forEach(c => c.disabled = true);
+      try {
+        await LIVE.act(it, action);
+        it.gone = true; close(); subline(); render(filter, document.getElementById('q').value);
+        toast({done: 'Marked as read.', remove: 'Archived. It left the queue.', delete: 'Deleted for good.'}[action]);
+      } catch (err){
+        const why = LIVE.fail(err);
+        if (LIVE.mode() === 'live'){ toast(`Not done: ${why}`); renderTools(); }
+        else HL.emit(it, action, ui);  // the server is gone: the same request as a chat paste
+      }
     }
     function renderPanel(){
-      const list = HL.current(it), unsent = list.filter(h => HL.isLocal(it, h.id)).length;
+      const list = HL.current(it), unsent = list.filter(h => HL.isLocal(it, h.id)).length, live = LIVE.mode() === 'live';
       panel.innerHTML = `
-        ${list.length ? `<div class="row"><span class="n"><b>${list.length}</b> ${list.length === 1 ? 'highlight' : 'highlights'}${unsent ? ` <span title="not yet sent to the agent">· ${unsent} unsent</span>` : ''}</span></div>` : ''}
+        ${list.length ? `<div class="row"><span class="n"><b>${list.length}</b> ${list.length === 1 ? 'highlight' : 'highlights'}${live ? (LIVE.pending(it) ? ' · saving…' : ' · saved') : unsent ? ` <span title="not yet sent to the agent">· ${unsent} unsent</span>` : ''}</span></div>` : ''}
         ${list.length ? `<ul>${list.map(h => `<li><div class="q ${orphans.includes(h.id) ? 'orphan' : ''}" data-c="${esc(HL.COLORS.includes(h.color) ? h.color : 'yellow')}" data-id="${esc(h.id)}" title="${orphans.includes(h.id) ? 'Not found in this text' : 'Show in the article'}">${esc(h.exact.length > 220 ? h.exact.slice(0, 220) + '…' : h.exact)}${h.note ? `<span class="nt">${esc(h.note)}</span>` : ''}</div><button class="x" data-id="${esc(h.id)}" aria-label="Remove highlight" title="Remove">×</button></li>`).join('')}</ul>` : `<p class="hint">${hlOn ? 'Select text in the article to highlight it. Click a highlight for a note or to remove it.' : 'Turn the highlighter on (pen icon at the top), then select text in the article.'}</p>`}
-        ${HL.storageOk() ? '' : '<p class="warn">This viewer does not keep highlights after the page closes or reloads. Use Copy for chat or Done reading before you leave.</p>'}
+        ${live || HL.storageOk() ? '' : '<p class="warn">This viewer does not keep highlights after the page closes or reloads. Use Copy for chat or Done reading before you leave.</p>'}
         <div class="copybox" id="copybox" hidden></div>`;
       panel.querySelectorAll('.q').forEach(q => q.addEventListener('click', () => { const m = article.querySelector(`mark.hl[data-id="${HL.cssEsc(q.dataset.id)}"]`); if (!m) return; m.scrollIntoView({block:'center', behavior:'smooth'}); m.classList.add('flash'); setTimeout(() => m.classList.remove('flash'), 1200); }));
       panel.querySelectorAll('.x').forEach(x => x.addEventListener('click', () => removeOne(x.dataset.id)));
-      tools.querySelector('#hl-copy').disabled = !list.length;
+      const copy = tools.querySelector('#hl-copy'); if (copy) copy.disabled = !list.length;
     }
     const ui = {
       toast,
@@ -542,8 +635,10 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       pop.querySelector('[data-a="remove"]').addEventListener('click', () => removeOne(h.id));
       pop.querySelectorAll('.sw').forEach(b => b.addEventListener('click', () => { const done = replaceMark(h.id); HL.setColorOf(it, h.id, b.dataset.c); closePop(); done(); }));
     });
+    refreshOpen = { it, run(){ renderTools(); renderPanel(); } };
     renderArticle(); renderTools(); renderPanel();
   }
+  let refreshOpen = null;  // the open reader's tools and panel, redrawn when the server's state changes
   pane.addEventListener('pointerdown', e => { if (pop && !pop.contains(e.target) && !e.target.closest('mark.hl')) closePop(); });
   reader.addEventListener('click', e => { if (e.target === reader) close(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && reader.classList.contains('open')) close(); });
@@ -567,6 +662,34 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
   document.getElementById('q').addEventListener('input', e => render(filter, e.target.value));
   render(filter, '');
   const want = decodeURIComponent(location.hash.slice(1)); const hit = want && items.find(i => i.id === want); if (hit) open(hit);
+
+  const conn = document.getElementById('conn');
+  LIVE.onMode = () => {
+    const m = LIVE.mode();
+    conn.hidden = !(m === 'down' || (m === 'live' && LIVE.stale()));
+    if (m === 'live' && LIVE.stale()){
+      conn.innerHTML = '<p><b>This page is out of date.</b> The read-later skill on your agent has a newer version of it. Everything still saves.</p>' +
+        '<div class="row"><button type="button" class="chip" data-a="republish">Ask the agent to republish it</button></div>';
+    }
+    if (m === 'down'){
+      conn.innerHTML = `<p><b>Cannot reach your agent's server</b> (${esc(LIVE.why())}). Done, Archive, Delete and highlights go through chat until it answers. Live saving works only in the preview beside the chat with this agent.</p>` +
+        '<div class="row"><button type="button" class="chip" data-a="retry">Retry</button><button type="button" class="chip" data-a="start">Ask the agent to start it</button></div>';
+    }
+    subline(); render(filter, document.getElementById('q').value);
+    if (refreshOpen){ if (refreshOpen.it.gone) close(); else refreshOpen.run(); }
+  };
+  LIVE.onSaved = (it, err) => {
+    if (err) toast(`Highlights not saved: ${err}`);
+    if (refreshOpen && refreshOpen.it === it) refreshOpen.run();
+  };
+  conn.addEventListener('click', e => {
+    const a = e.target.closest('[data-a]')?.dataset.a;
+    if (a === 'retry') LIVE.connect();
+    if (a === 'republish') toast(LIVE.askToRepublish() ? 'Asked the agent in the chat. It replies with the new version.' : 'Could not reach the chat. Ask the agent to republish the read-later page.');
+    if (a === 'start') toast(LIVE.askToStart() ? 'Asked the agent in the chat. Retry when it says the server answers.' : 'Could not reach the chat. Ask the agent to start the read-later server.');
+  });
+  subline();
+  LIVE.connect();
 })();
 </script>
 </body>

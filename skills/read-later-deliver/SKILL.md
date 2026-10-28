@@ -1,9 +1,9 @@
 ---
 name: read-later-deliver
-description: Publishes the read-later queue as one artifact in the DAM artifact library, updating the same artifact each time the queue changes, and stores highlights the reader pastes from that page. Use after read-later-rank, when asked to publish or show the reading queue, on the daily schedule, or when the reader pastes a "Read later highlights" JSON (highlights.json) or says they are done reading.
-compatibility: DAM agent with the platform artifact tools (create_artifact, update_artifact) on its MCP endpoint. Python 3.11+ for the renderer.
+description: Publishes the read-later queue as one interactive artifact in the DAM artifact library, updating the same artifact each time the queue changes, and runs the small server the page saves highlights, Done, Archive and Delete to. Use after read-later-rank, when asked to publish or show the reading queue, on the daily schedule, when asked to start the read-later server, or when the reader pastes a "Read later highlights" JSON (highlights.json) or says they are done reading.
+compatibility: DAM agent with the platform artifact tools (create_artifact, update_artifact) on its MCP endpoint and interactive artifacts (the reader turns on Interactive artifacts in DAM's settings). Python 3.11+, standard library only.
 metadata:
-  version: "0.1"
+  version: "0.2"
 ---
 
 # Read Later · Deliver
@@ -14,7 +14,20 @@ The page is `assets/template.html` (design) plus data injected by `scripts/rende
 
 ## Highlights
 
-In the reader pane the reader turns the highlighter on (pen icon in the sticky header, with five colors), selects text, and gets a mark; clicking a mark adds a note, changes its color or removes it. The list of highlights sits below the article. The header also has **Archive** and **Delete**, which copy a one-line request to drop the article: archive keeps the folder and leaves the queue, delete removes the folder for good. Highlights live in the reader's browser (localStorage per item, or only in memory in DAM's sandboxed viewer, which the page says) until **Copy for chat** or **Done reading** puts the content of `highlights.json` on the clipboard and the reader pastes it into chat. The renderer injects that file back into the page, so after the next publish the highlights show in every browser; marks not yet sent are underlined and counted as "unsent". The page cannot write to the agent yet; when DAM's artifact bridge ships, the artifact will write the file itself.
+In the reader pane the reader turns the highlighter on (pen icon in the sticky header, with five colors), selects text, and gets a mark; clicking a mark adds a note, changes its color or removes it. The list of highlights sits below the article. The header also has **Done reading**, **Archive** (it leaves the queue, the folder stays) and **Delete** (the folder goes, for good; it asks for a second click).
+
+The page has two modes:
+
+- **Live**, in the preview beside the chat with this agent, when the [server](#server) answers. Every highlight edit saves to `items/<folder>/highlights.json` half a second later; Done, Archive and Delete change the item at once and the tile leaves the shelf. On load the page asks the server for the current state, so items finished or removed since the last publish are hidden and highlights from other browsers show. When the template on the agent is newer than the one the page was rendered from (the skill was updated), the page says it is out of date and offers **Ask the agent to republish it**.
+- **Chat paste**, anywhere else (the artifact library), or when the server does not answer. The page says so and offers **Retry** and **Ask the agent to start it**, which sends a prompt to this chat. Highlights live in the browser until **Copy for chat** or **Done reading** puts `highlights.json` on the clipboard, and Archive and Delete copy a one-line request. The reader pastes it into chat; see below.
+
+### When the reader asks you to start the server
+
+Run `python3 scripts/server.py --ensure ~/work/read-later` from this skill's directory and reply with one line: running, or the error and what it needs. See [Server](#server).
+
+### When the reader says the page is out of date
+
+Run this skill as usual (render, then update the artifact). The template changed, so the render reports `changed: true`. Reply with the link.
 
 ### When the reader pastes highlights
 
@@ -31,7 +44,8 @@ If the paste starts with "Read later, done reading, mark it as read: <url>", als
 
 ## Available scripts
 
-- **`scripts/render.py`** — writes `queue.html` and prints `{"html", "changed", "artifactId", "items"}`. It records the data's hash in `deliver.json`, so `changed` is false when nothing in the queue, the items or their highlights changed since the last publish.
+- **`scripts/render.py`** — writes `queue.html` and prints `{"html", "changed", "artifactId", "replaces", "items"}`. It records the data's hash in `deliver.json`, so `changed` is false when nothing in the queue, the items or their highlights changed since the last publish. It leaves out items that are done or archived, or whose folder is gone, since rank wrote the queue.
+- **`scripts/server.py`** — the page's server; see [Server](#server).
 
 ## Run
 
@@ -44,11 +58,30 @@ python3 scripts/render.py ~/work/read-later
 Then, based on the printed JSON:
 
 - `changed: false` → say "queue unchanged, artifact not republished" and stop.
-- `changed: true` and `artifactId: null` → first publish. Call `create_artifact` with the file's content, title `Read later`, file name `queue.html`, kind HTML, visibility private. Keep the id; the reader's link depends on it.
+- `changed: true` and `artifactId: null` → first publish. Call `create_artifact` with the file's content, title `Read later`, file name `queue.html`, kind HTML, visibility private, **`interactive: true`**. Keep the id; the reader's link depends on it. Only create can make an artifact interactive, so when `replaces` names an older artifact id, this is a new artifact with a new link: tell the reader once that they can delete the old `Read later` artifact (`replaces`).
 - `changed: true` and an `artifactId` → call `update_artifact` with that id and the new content. Same link, new version.
 - After a successful create or update, run `python3 scripts/render.py --published <artifact id> ~/work/read-later`. That records the id and marks this render as published; without it the next run publishes again. If the publish failed, do not run it: the next run retries.
+- Then, whatever `changed` said, run `python3 scripts/server.py --ensure ~/work/read-later`. It does nothing when the server already runs.
 
 Do not read `queue.html` into your context; it is a few KB of generated HTML. Either pass its content to the tool directly, or use `create_artifact_upload_url` and `curl -sS -X PUT -H 'Content-Type: text/html; charset=utf-8' --data-binary @queue.html '<url>'`, then pass the `upload_ref`. Never create a second artifact for the queue: if `update_artifact` fails because the artifact is gone, say so and ask before creating a new one.
+
+## Server
+
+`scripts/server.py` is a small HTTP server (standard library) on `127.0.0.1:5555`, the one port DAM relays the page's `platform.request` calls to. DAM lets only this agent's own interactive artifact reach it, and the server checks every input. It reads and writes only inside the state dir:
+
+| call | does |
+|---|---|
+| `GET /health` | version and pid |
+| `GET /items` | status and highlights of every folder in `items/`, and the hash of the current template |
+| `PUT /items/<folder>/highlights` | replaces `highlights.json` with the page's file (only the known fields are kept) |
+| `PATCH /items/<folder>` `{"status": "done" \| "archived"}` | the same change as ingest's `done` and `remove` events |
+| `DELETE /items/<folder>` | removes the folder from `items/`, `done/` or `archive/`, like a `delete` event |
+
+Each change appends a line to `feedback.jsonl` (`via page`); highlights only when their count changes.
+
+`python3 scripts/server.py --ensure ~/work/read-later` starts it in the background unless the current version already answers, and prints `{"running": true, ...}`. After a skill update it stops the old version and starts the new one. It starts the server with `platform-keep`, so DAM lists it in the Processes panel and keeps it running; the log is `~/work/read-later/server.log`. A `SessionStart` hook in `~/work/.claude/settings.json` runs `--ensure` whenever a session starts, so a chat or a schedule tick brings the server back after a restart (INSTALL.md, Start-up hook).
+
+When the server will not start: read the end of `server.log`. "cannot listen on 127.0.0.1:5555" means another program has the port: find it (`ss -ltnp | grep 5555` or `lsof -i :5555`), and stop it only if it is an older read-later server; otherwise report it. Any other error: report it with the last log lines. Never bind another address or port; DAM relays only to this one.
 
 ## After the run
 
@@ -57,5 +90,6 @@ Reply with the internal link as a markdown link (`[Read later](platform://artifa
 ## Rules
 
 - `queue.html` and `deliver.json` are generated; fix the template, the renderer or the ranking, never the files.
-- The artifact is a static page; it cannot call the agent. Marking something read, archiving or deleting it happens through the Chrome extension ("Mark as read", "Archive in Read Later", "Delete from Read Later"), by telling the agent, or by pasting the page's **Done reading**, **Archive** or **Delete** message into chat. Highlights reach the agent only through that paste.
-- `highlights.json` is written only from a paste, verbatim. Never compose or edit one yourself.
+- Marking something read, archiving or deleting it happens in the live page, through the Chrome extension ("Mark as read", "Archive in Read Later", "Delete from Read Later"), by telling the agent, or by pasting the page's **Done reading**, **Archive** or **Delete** message into chat.
+- `highlights.json` is written only by the server (from the page) or from a paste, verbatim. Never compose or edit one yourself.
+- Do not edit `server.py`'s routes to do more for the page; it is the whole surface the page can reach.

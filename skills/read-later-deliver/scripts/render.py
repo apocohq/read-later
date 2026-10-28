@@ -11,7 +11,10 @@ into the template, and writes STATE_DIR/queue.html.
 The template is the design; this script only supplies data. To restyle, edit the
 template (or drop a copy at STATE_DIR/template.html, which wins).
 
-Prints one JSON object: {"html": "<path>", "changed": true|false, "artifactId": "<id or null>", "items": N}.
+Prints one JSON object: {"html": "<path>", "changed": true|false, "artifactId": "<id or null>", "replaces": "<id or null>", "items": N}.
+The page is an interactive artifact, and only create_artifact can make one. A deliver.json from before that
+(an artifactId without "interactive": true) therefore yields artifactId null, so the agent creates a new
+artifact, and "replaces" names the old one for the owner to delete.
 `changed` is false when the data and the template are identical to the last *published* render,
 so the agent can skip publishing a new artifact version. After a successful create_artifact or
 update_artifact the agent runs `render.py --published <artifact id> STATE_DIR`, which records the id
@@ -91,6 +94,15 @@ def entry(root: Path, e: dict, bucket: str) -> dict:
     }
 
 
+def live(root: Path, e: dict) -> bool:
+    """False when the page finished, archived or deleted the item after rank wrote the queue."""
+    path = root / e["item"] / "item.json"
+    try:
+        return json.loads(path.read_text()).get("status") not in ("done", "archived")
+    except (OSError, ValueError):
+        return False
+
+
 def via(item: dict) -> dict | None:
     """Who shared the item and where, from the first capture that says so (Slack captures carry recommendedBy, sourceRef and the poster's words as note)."""
     for c in item.get("captures", []):
@@ -106,7 +118,7 @@ def record_published(root: Path, artifact_id: str) -> int:
     if not state.get("renderedHash"):
         print(f"error: {dpath} has no renderedHash; run render.py without --published first", file=sys.stderr)
         return 3
-    state.update(artifactId=artifact_id, publishedHash=state["renderedHash"])
+    state.update(artifactId=artifact_id, publishedHash=state["renderedHash"], interactive=True)
     dpath.write_text(json.dumps(state, indent=2) + "\n")
     print(json.dumps({"artifactId": artifact_id, "publishedHash": state["publishedHash"]}))
     return 0
@@ -125,13 +137,13 @@ def main(argv: list[str]) -> int:
         print(f"error: {qpath} missing. Run read-later-rank first.", file=sys.stderr)
         return 3
     queue = json.loads(qpath.read_text())
-    items = [entry(root, e, b) for b in BUCKETS for e in queue.get("buckets", {}).get(b, [])]
+    items = [entry(root, e, b) for b in BUCKETS for e in queue.get("buckets", {}).get(b, []) if live(root, e)]
     attention = [a for a in queue.get("attention", []) if isinstance(a, dict) and a.get("url")]
     topics = [t for t in queue.get("topics", []) if isinstance(t, dict) and t.get("label")]
-    data = {"generatedAt": queue.get("generatedAt"), "items": items, "attention": attention, "topics": topics}
-
     template_path = root / "template.html" if (root / "template.html").exists() else SKILL_DIR / "assets" / "template.html"
     template = template_path.read_text()
+    data = {"generatedAt": queue.get("generatedAt"), "items": items, "attention": attention, "topics": topics,
+            "template": hashlib.sha256(template.encode()).hexdigest()[:12]}  # the server reports its own; a mismatch says republish
     if "/*__DATA__*/" not in template:
         print(f"error: {template_path} has no /*__DATA__*/ placeholder", file=sys.stderr)
         return 2
@@ -144,12 +156,13 @@ def main(argv: list[str]) -> int:
     dpath = root / "deliver.json"
     state = json.loads(dpath.read_text()) if dpath.exists() else {}
     published = state.get("publishedHash") or state.get("contentHash")  # contentHash: written by older versions after a publish
-    changed = published != digest or not state.get("artifactId")
+    artifact_id = state.get("artifactId") if state.get("interactive") else None
+    changed = published != digest or not artifact_id
     if state.pop("contentHash", None) and state.get("artifactId") and not state.get("publishedHash"):
         state["publishedHash"] = published  # migrate from the older scheme once
     state["renderedHash"] = digest
     dpath.write_text(json.dumps(state, indent=2) + "\n")
-    print(json.dumps({"html": str(root / "queue.html"), "changed": changed, "artifactId": state.get("artifactId"), "items": len(items)}))
+    print(json.dumps({"html": str(root / "queue.html"), "changed": changed, "artifactId": artifact_id, "replaces": None if artifact_id else state.get("artifactId"), "items": len(items)}))
     return 0
 
 
