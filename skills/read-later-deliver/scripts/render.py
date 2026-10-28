@@ -140,10 +140,10 @@ def main(argv: list[str]) -> int:
     items = [entry(root, e, b) for b in BUCKETS for e in queue.get("buckets", {}).get(b, []) if live(root, e)]
     attention = [a for a in queue.get("attention", []) if isinstance(a, dict) and a.get("url")]
     topics = [t for t in queue.get("topics", []) if isinstance(t, dict) and t.get("label")]
-    data = {"generatedAt": queue.get("generatedAt"), "items": items, "attention": attention, "topics": topics}
-
     template_path = root / "template.html" if (root / "template.html").exists() else SKILL_DIR / "assets" / "template.html"
     template = template_path.read_text()
+    data = {"generatedAt": queue.get("generatedAt"), "items": items, "attention": attention, "topics": topics,
+            "template": hashlib.sha256(template.encode()).hexdigest()[:12]}  # the server reports its own; a mismatch says republish
     if "/*__DATA__*/" not in template:
         print(f"error: {template_path} has no /*__DATA__*/ placeholder", file=sys.stderr)
         return 2

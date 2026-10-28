@@ -442,7 +442,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
   // live: highlights save as you go, Done, Archive and Delete act at once. Otherwise each one goes to the agent as a chat paste.
   const LIVE = (() => {
     const bridge = window.platform && typeof window.platform.request === 'function' ? window.platform : null;
-    let mode = bridge ? 'checking' : 'off', why = '', onMode = () => {}, onSaved = () => {};
+    let mode = bridge ? 'checking' : 'off', why = '', stale = false, onMode = () => {}, onSaved = () => {};
     const timers = {}, inflight = {};
     const REASONS = {'app-not-listening': 'the server is not running', 'timeout': 'no answer', 'not-allowed': 'this view cannot call the agent', 'agent-unreachable': 'the agent is not reachable', 'unsupported-runtime': 'the agent is too old for this', 'too-many-requests': 'too many requests at once'};
     const reasonText = r => REASONS[r] || r || 'unknown error';
@@ -465,7 +465,8 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       if (!bridge) return;
       mode = 'checking'; why = ''; onMode();
       try {
-        const known = (await call('GET', '/items', undefined, 10000) || {}).items || {};
+        const doc = await call('GET', '/items', undefined, 10000) || {}, known = doc.items || {};
+        stale = !!(doc.template && DATA.template && doc.template !== DATA.template);  // the skill on the agent has a newer template
         for (const it of items){
           const s = known[it.id];
           if (!s || s.status === 'done' || s.status === 'archived') it.gone = true;  // finished, archived or deleted since this version was published
@@ -494,10 +495,10 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       if (pending(it)) await save(it);
       return action === 'delete' ? call('DELETE', path(it)) : call('PATCH', path(it), {status: action === 'done' ? 'done' : 'archived'});
     }
-    function askToStart(){
-      try { bridge.sendPrompt('Read later: the library page cannot reach its server. Start it with the read-later-deliver skill (server.py --ensure ~/work/read-later), then tell me whether it answers.'); return true; } catch { return false; }
-    }
-    return { mode: () => mode, why: () => why, connect, saveSoon, save, act, fail, pending, askToStart,
+    function ask(text){ try { bridge.sendPrompt(text); return true; } catch { return false; } }
+    const askToStart = () => ask('Read later: the library page cannot reach its server. Start it with the read-later-deliver skill (server.py --ensure ~/work/read-later), then tell me whether it answers.');
+    const askToRepublish = () => ask('Read later: the library page is out of date. Run the read-later-deliver skill to render and publish it again, and give me the link.');
+    return { mode: () => mode, why: () => why, stale: () => stale, connect, saveSoon, save, act, fail, pending, askToStart, askToRepublish,
       set onMode(f){ onMode = f; }, set onSaved(f){ onSaved = f; } };
   })();
   hlChanged = it => LIVE.saveSoon(it);
@@ -665,7 +666,11 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
   const conn = document.getElementById('conn');
   LIVE.onMode = () => {
     const m = LIVE.mode();
-    conn.hidden = m !== 'down';
+    conn.hidden = !(m === 'down' || (m === 'live' && LIVE.stale()));
+    if (m === 'live' && LIVE.stale()){
+      conn.innerHTML = '<p><b>This page is out of date.</b> The read-later skill on your agent has a newer version of it. Everything still saves.</p>' +
+        '<div class="row"><button type="button" class="chip" data-a="republish">Ask the agent to republish it</button></div>';
+    }
     if (m === 'down'){
       conn.innerHTML = `<p><b>Cannot reach your agent's server</b> (${esc(LIVE.why())}). Done, Archive, Delete and highlights go through chat until it answers. Live saving works only in the preview beside the chat with this agent.</p>` +
         '<div class="row"><button type="button" class="chip" data-a="retry">Retry</button><button type="button" class="chip" data-a="start">Ask the agent to start it</button></div>';
@@ -680,6 +685,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
   conn.addEventListener('click', e => {
     const a = e.target.closest('[data-a]')?.dataset.a;
     if (a === 'retry') LIVE.connect();
+    if (a === 'republish') toast(LIVE.askToRepublish() ? 'Asked the agent in the chat. It replies with the new version.' : 'Could not reach the chat. Ask the agent to republish the read-later page.');
     if (a === 'start') toast(LIVE.askToStart() ? 'Asked the agent in the chat. Retry when it says the server answers.' : 'Could not reach the chat. Ask the agent to start the read-later server.');
   });
   subline();

@@ -18,12 +18,16 @@ In the reader pane the reader turns the highlighter on (pen icon in the sticky h
 
 The page has two modes:
 
-- **Live**, in the preview beside the chat with this agent, when the [server](#server) answers. Every highlight edit saves to `items/<folder>/highlights.json` half a second later; Done, Archive and Delete change the item at once and the tile leaves the shelf. On load the page asks the server for the current state, so items finished or removed since the last publish are hidden and highlights from other browsers show.
+- **Live**, in the preview beside the chat with this agent, when the [server](#server) answers. Every highlight edit saves to `items/<folder>/highlights.json` half a second later; Done, Archive and Delete change the item at once and the tile leaves the shelf. On load the page asks the server for the current state, so items finished or removed since the last publish are hidden and highlights from other browsers show. When the template on the agent is newer than the one the page was rendered from (the skill was updated), the page says it is out of date and offers **Ask the agent to republish it**.
 - **Chat paste**, anywhere else (the artifact library), or when the server does not answer. The page says so and offers **Retry** and **Ask the agent to start it**, which sends a prompt to this chat. Highlights live in the browser until **Copy for chat** or **Done reading** puts `highlights.json` on the clipboard, and Archive and Delete copy a one-line request. The reader pastes it into chat; see below.
 
 ### When the reader asks you to start the server
 
 Run `python3 scripts/server.py --ensure ~/work/read-later` from this skill's directory and reply with one line: running, or the error and what it needs. See [Server](#server).
+
+### When the reader says the page is out of date
+
+Run this skill as usual (render, then update the artifact). The template changed, so the render reports `changed: true`. Reply with the link.
 
 ### When the reader pastes highlights
 
@@ -68,14 +72,14 @@ Do not read `queue.html` into your context; it is a few KB of generated HTML. Ei
 | call | does |
 |---|---|
 | `GET /health` | version and pid |
-| `GET /items` | status and highlights of every folder in `items/` |
+| `GET /items` | status and highlights of every folder in `items/`, and the hash of the current template |
 | `PUT /items/<folder>/highlights` | replaces `highlights.json` with the page's file (only the known fields are kept) |
 | `PATCH /items/<folder>` `{"status": "done" \| "archived"}` | the same change as ingest's `done` and `remove` events |
 | `DELETE /items/<folder>` | removes the folder from `items/`, `done/` or `archive/`, like a `delete` event |
 
 Each change appends a line to `feedback.jsonl` (`via page`); highlights only when their count changes.
 
-`python3 scripts/server.py --ensure ~/work/read-later` starts it in the background unless the current version already answers, and prints `{"running": true, ...}`. After a skill update it stops the old version and starts the new one. It starts the server with `platform-keep`, so DAM lists it in the Processes panel and keeps it running; the log is `~/work/read-later/server.log`. The `read-later-server` schedule runs `--ensure` as its precheck every 30 minutes and costs a turn only when the server will not start.
+`python3 scripts/server.py --ensure ~/work/read-later` starts it in the background unless the current version already answers, and prints `{"running": true, ...}`. After a skill update it stops the old version and starts the new one. It starts the server with `platform-keep`, so DAM lists it in the Processes panel and keeps it running; the log is `~/work/read-later/server.log`. A `SessionStart` hook in `~/work/.claude/settings.json` runs `--ensure` whenever a session starts, so a chat or a schedule tick brings the server back after a restart (INSTALL.md, Start-up hook).
 
 When the server will not start: read the end of `server.log`. "cannot listen on 127.0.0.1:5555" means another program has the port: find it (`ss -ltnp | grep 5555` or `lsof -i :5555`), and stop it only if it is an older read-later server; otherwise report it. Any other error: report it with the last log lines. Never bind another address or port; DAM relays only to this one.
 

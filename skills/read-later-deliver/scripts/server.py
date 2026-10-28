@@ -3,14 +3,15 @@
 The library page's server: the small HTTP API the interactive `Read later` artifact calls
 through DAM's artifact bridge (`platform.request`). Standard library only.
 
-    python3 scripts/server.py --ensure STATE_DIR   start it unless it already answers (what the schedule's Precheck runs)
+    python3 scripts/server.py --ensure STATE_DIR   start it unless it already answers (what the SessionStart hook runs)
     python3 scripts/server.py STATE_DIR            run it in the foreground (what --ensure starts)
 
 It listens on 127.0.0.1:5555, the port DAM relays to (the Artifact API Port), and reads and writes
 only inside STATE_DIR. DAM checks that the caller owns the artifact; this server checks every input.
 
     GET    /health                     {"app": "read-later", "version", "pid", "stateDir"}
-    GET    /items                      {"items": {"<folder>": {"status", "highlights"}}} for every folder in items/
+    GET    /items                      {"items": {"<folder>": {"status", "highlights"}}} for every folder in items/,
+                                       and "template": the hash of the template a render would use now
     PUT    /items/<folder>/highlights  body: the page's highlights.json; replaces the file
     PATCH  /items/<folder>             body: {"status": "done" | "archived"}
     DELETE /items/<folder>             removes the folder from items/, done/ or archive/ for good
@@ -49,6 +50,16 @@ MAX_BODY = 1024 * 1024  # DAM's cap each way
 FOLDER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$")
 COLORS = {"yellow", "green", "blue", "pink", "orange"}
 POOLS = ("items", "done", "archive")
+SKILL_DIR = Path(__file__).resolve().parent.parent
+
+
+def template_hash(root: Path) -> str:
+    """Same rule as render.py: STATE_DIR/template.html wins. The page compares it with the hash it was rendered from."""
+    path = root / "template.html" if (root / "template.html").exists() else SKILL_DIR / "assets" / "template.html"
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()[:12]
+    except OSError:
+        return ""
 
 
 def now() -> str:
@@ -106,7 +117,7 @@ class State:
             except (OSError, ValueError):
                 continue
             out[p.parent.name] = {"status": status, "highlights": self.highlights_of(p.parent)}
-        return {"items": out}
+        return {"items": out, "template": template_hash(self.root)}
 
     def put_highlights(self, name: str, body: dict) -> dict:
         path = self.folder(name, POOLS)

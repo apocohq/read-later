@@ -1,8 +1,8 @@
 # Installing read-later on a DAM agent
 
-One agent, six skills, one Chrome extension, three schedules, and optionally Slack. The short way is section A: the agent installs all of it on itself and hands you a list of the few things an agent cannot do. Section B is the same work by hand, from the CLI. Section C is the extension, section D Slack, section E the reader's context when it lives on another agent.
+One agent, six skills, one Chrome extension, two schedules, one start-up hook, and optionally Slack. The short way is section A: the agent installs all of it on itself and hands you a list of the few things an agent cannot do. Section B is the same work by hand, from the CLI. Section C is the extension, section D Slack, section E the reader's context when it lives on another agent.
 
-**What only a human can do**, because the platform gives no agent the power: create the agent, grant it a connection, change its network rules, restart it, register the skill source, mint an API key, load the extension in a browser, and turn on *Interactive artifacts* in their own DAM settings. That is the whole list. Everything else — skills, folders, the context file, dependencies, schedules, the DAM CLI on the agent — the agent does for itself, and it tells you exactly which of the above it still needs.
+**What only a human can do**, because the platform gives no agent the power: create the agent, grant it a connection, change its network rules, restart it, register the skill source, mint an API key, load the extension in a browser, and turn on *Interactive artifacts* in their own DAM settings. That is the whole list. Everything else — skills, folders, the context file, dependencies, schedules, the start-up hook, the DAM CLI on the agent — the agent does for itself, and it tells you exactly which of the above it still needs.
 
 ## 0. Before either way (owner, once)
 
@@ -40,9 +40,10 @@ If you are the agent reading this, do these in order and report at the end. Do n
    - Those files live on **another agent**, named by the owner or known to you: write the third shape, naming that agent and its files, and do the agent half of section [E](#e-context-from-another-agent) now — install the DAM CLI under `~/.local` and point it at the platform. Then put the owner's three commands (network rule, key, connection, restart) in your report. The file is correct in advance; it starts working the moment the owner runs them.
    - You know nothing about the reader and the owner named no agent: write the single line `NO CONTEXT AVAILABLE`, and say in the report that one sentence about the reader, or the name of an agent that holds their files, is all you need to do better.
 6. **Dependencies.** From the ingest skill's directory (`~/.claude/skills/read-later-ingest`) run `UV_CACHE_DIR=~/work/.cache/uv uv run scripts/ingest.py ~/work/read-later` once. The inbox is empty, so it only downloads the Python packages (about 30 MB; PyMuPDF for PDFs, another 250 MB, comes with the first PDF) and prints `done: 0 extracted, 0 failed`. If it prints `mise` lines and hangs, stop and tell the owner the two network rules from section 0 are missing.
-7. **Schedules.** Call `create_schedule` three times with the exact names, tasks, times and, for `read-later-server`, the precheck from [Schedules](#schedules). Use the owner's timezone if you know it, otherwise `Europe/Prague`. Fresh session each tick. If a schedule with the same name already exists, leave it. Then start the library page's server once: from the deliver skill's directory run `python3 scripts/server.py --ensure ~/work/read-later`; it prints `"running": true`.
-8. **Git.** If `~/work` is a git repository, make sure `.gitignore` covers `read-later/inbox/`, `read-later/items/`, `read-later/done/` and `read-later/archive/`; keep `topics.md`, `context.md` and `feedback.jsonl` versioned.
-9. **Report and stop.** Two short lists. First, what you did, in one line each. Second, **what is left for the owner**, as commands they can paste, and nothing else — typically only:
+7. **Schedules.** Call `create_schedule` twice with the exact names, tasks and times from [Schedules](#schedules). Use the owner's timezone if you know it, otherwise `Europe/Prague`. Fresh session each tick. If a schedule with the same name already exists, leave it.
+8. **Start-up hook.** Merge the hook from [Start-up hook](#start-up-hook) into `~/work/.claude/settings.json` (make the file if it is missing; keep any other keys and hooks there). Then start the library page's server once: run the hook's command without the redirect; it prints `"running": true`.
+9. **Git.** If `~/work` is a git repository, make sure `.gitignore` covers `read-later/inbox/`, `read-later/items/`, `read-later/done/` and `read-later/archive/`; keep `topics.md`, `context.md` and `feedback.jsonl` versioned.
+10. **Report and stop.** Two short lists. First, what you did, in one line each. Second, **what is left for the owner**, as commands they can paste, and nothing else — typically only:
 
    ```sh
    dam auth token create --name read-later-ext --scope agents:operate agents:read --agent <this agent's id>
@@ -79,12 +80,11 @@ ssh dam-<agent> 'cd ~/.claude/skills/read-later-ingest && UV_CACHE_DIR=~/work/.c
 
 The first bookmark from the extension would make `inbox/` anyway, and the first ingest would download the packages (about a minute of that refresh) — but `read-later-slack` refuses to run without `inbox/` (`error: … has no inbox/ folder`), so a Slack-only setup needs the `mkdir`. Everything else the skills make themselves.
 
-Create the three schedules with the tasks from [Schedules](#schedules), and start the page's server once:
+Create the two schedules with the tasks from [Schedules](#schedules), add the [start-up hook](#start-up-hook) to `~/work/.claude/settings.json` on the agent, and start the page's server once:
 
 ```sh
 dam schedule create <agent> --name read-later-refresh --daily 18:00 --timezone Europe/Prague --session-mode fresh --task '<refresh task>'
 dam schedule create <agent> --name read-later-prune --daily 09:00 --weekdays SU --timezone Europe/Prague --session-mode fresh --task '<prune task>'
-dam schedule create <agent> --name read-later-server --every 30m --timezone Europe/Prague --session-mode fresh --precheck '<server precheck>' --task '<server task>'
 ssh dam-<agent> 'cd ~/.claude/skills/read-later-deliver && python3 scripts/server.py --ensure ~/work/read-later'
 ```
 
@@ -223,21 +223,29 @@ With the marker, ranking still works; it just uses the weights as they are, and 
 
 ## Schedules
 
-Three schedules, fresh session each tick. The refresh at 18:00 means everything saved during the day is in that evening's queue; move the hour to your reading time. `read-later-server` keeps the library page's server running: its precheck starts the server when it does not answer and then skips the turn, so it costs no model call. The task runs only when the server will not start, and the precheck's output tells the agent why.
+Two schedules, fresh session each tick. The refresh at 18:00 means everything saved during the day is in that evening's queue; move the hour to your reading time.
 
 | name | when | task |
 |---|---|---|
 | `read-later-refresh` | daily 18:00 | `Read-later refresh. State dir ~/work/read-later. Use the installed skills in this order, and only these: read-later-slack (run its script; skip the skill if it reports no Slack connection), read-later-ingest (with UV_CACHE_DIR=~/work/.cache/uv), read-later-analyze (pass only the model connection), read-later-rank (reweigh from context.md first), read-later-deliver. Report each script output briefly and the artifact link. Do not open articles.` |
 | `read-later-prune` | Sundays 09:00 | `Read-later weekly prune. State dir ~/work/read-later. Use skill read-later-prune: run its script, then tidy topics.md as the skill describes. Report what moved and what changed in the vocabulary.` |
-| `read-later-server` | every 30 minutes (`FREQ=MINUTELY;INTERVAL=30`) | `Read-later server. State dir ~/work/read-later. The library page's server did not start; the precheck output below says why. Use skill read-later-deliver (section Server): read ~/work/read-later/server.log, fix what you can, run server.py --ensure again, and report in two lines.` |
 
-The `read-later-server` precheck, verbatim:
+## Start-up hook
 
-```sh
-python3 ~/.claude/skills/read-later-deliver/scripts/server.py --ensure ~/work/read-later && exit 1; exit 0
+The library page saves through a small server on the agent (`127.0.0.1:5555`). Nothing on the platform starts it after a restart or hibernation, so every session the agent starts — a chat, a schedule tick — starts it first. In `~/work/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "timeout": 60,
+        "command": "python3 ~/.claude/skills/read-later-deliver/scripts/server.py --ensure ~/work/read-later >/dev/null 2>&1; exit 0" } ] }
+    ]
+  }
+}
 ```
 
-It exits 1 (skip the turn) when the server runs, and 0 (run the task) when it could not start it.
+It does nothing when the server already runs, restarts it when the skill was updated, and never stops a session from starting. Between a restart and the next session the page says it cannot reach the server and offers a button that asks the agent to start it. The hook sits in the work folder, not in `~/.claude/settings.json`, because the platform writes that file too.
 
 ## Check the install
 
@@ -247,7 +255,7 @@ The same from the CLI, if you want to see for yourself:
 
 ```sh
 dam skill list <agent>                     # six read-later-* skills, under Installed skills
-dam schedule list <agent>                  # read-later-refresh, read-later-prune and read-later-server, enabled
+dam schedule list <agent>                  # read-later-refresh and read-later-prune, enabled
 dam file list <agent> work/read-later      # inbox/ and context.md at least
 ```
 
