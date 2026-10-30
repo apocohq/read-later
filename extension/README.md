@@ -13,7 +13,7 @@ No Slack app, no GitHub token. The only credential is a DAM API key.
    pnpm ext:build        # writes extension/dist/
    ```
 3. **Load it.** `chrome://extensions` → Developer mode → Load unpacked → pick `extension/dist`. Arc: same page via `arc://extensions`.
-4. **Configure.** Open the extension options (right-click the icon → Options). Enter the DAM host origin and API key, click *Load agents*, pick the agent, keep the folder as `work/read-later` (paths are relative to the agent's home directory; this is the state dir the skills read). Save. The browser asks once for permission to reach the DAM host.
+4. **Configure.** Open the extension options (right-click the icon → Options). Enter the DAM host origin and API key, click *Load agents*, pick the agent, keep the folder as `work/read-later` (paths are relative to the agent's home directory; this is the state dir the skills read). Save. The browser asks once for permission to reach the DAM host. Optionally click *Allow reading embedded content*: pages that show their text in a frame from another site (a claude.ai artifact) then save that text too; without it the agent gets only the outer page and must fetch the rest itself, which fails behind a login or a bot check.
 5. **Test upload** writes a small `.txt` file into `work/read-later/inbox/` on the agent. Ingest skips non-JSON files; delete it whenever.
 
 ## Use

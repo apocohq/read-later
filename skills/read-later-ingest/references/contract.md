@@ -27,7 +27,7 @@ Written by producers (the Chrome extension, `read-later-slack`, the agent from c
 | `url` | yes | as seen; canonicalization happens here, not in the producer |
 | `title` | no | page title |
 | `selectedText`, `note` | no | the user's own signal why it matters |
-| `html` | no | rendered DOM; makes paywalled and JS-rendered pages work. The extension drops what no extraction reads (scripts other than JSON-LD, styles, inline SVG, noscript, templates, style attributes) before sending. Omitted when the tab is not an HTML document (a PDF in the browser's viewer); ingest fetches the URL instead |
+| `html` | no | rendered DOM; makes paywalled and JS-rendered pages work. The extension drops what no extraction reads (scripts other than JSON-LD, styles, inline SVG, noscript, templates, style attributes) before sending. When the page has fewer than 80 words and an embedded frame has more (a claude.ai artifact shows its text in a frame from another site), it sends that frame's HTML instead, with links made absolute; reading frames from other sites needs the extension's optional permission. Omitted when the tab is not an HTML document (a PDF in the browser's viewer); ingest fetches the URL instead |
 | `text` | no | readable text supplied by a producer that has no HTML |
 | `mustRead` | no | hard override for later ranking; never filtered out |
 | `recommendedBy` | no | who shared it and where, e.g. `Radek Ježek in #podcast-club`; shown on the library page |
