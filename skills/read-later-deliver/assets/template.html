@@ -656,7 +656,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       (rest > 0 ? `<button class="chip more" data-more="1" aria-expanded="${moreTopics}">${moreTopics ? 'Fewer' : `${rest} more`}</button>` : '');
   }
   document.getElementById('controls').addEventListener('click', e => {
-    const b = e.target.closest('.chip'); if (!b) return;
+    const b = e.target.closest('.chip[data-f], .chip[data-more]'); if (!b) return;  // Refresh is a chip in this row too
     if (b.dataset.more){ moreTopics = !moreTopics; renderTopics(); return; }
     filter = b.dataset.f; renderTopics();
     render(filter, document.getElementById('q').value);
