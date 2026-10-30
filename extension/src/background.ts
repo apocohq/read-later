@@ -50,8 +50,8 @@ const MIN_WORDS = 80;
 /**
  * Snapshot every frame the extension may read and keep the one with the content. The tab's own page
  * wins unless it is a thin shell around an embed (a claude.ai artifact, a CodePen): then the frame
- * with the most words. Cross-origin frames need host permission (Options → Allow reading embedded
- * content); without it Chrome returns only the frames `activeTab` covers.
+ * with the most words. Frames from other sites are readable because the manifest holds every https
+ * host; Chrome skips any frame it may not read.
  */
 async function snapshotTab(tabId: number): Promise<PageSnapshot | undefined> {
   const frames = await chrome.scripting
