@@ -110,6 +110,19 @@ async function testUpload(): Promise<void> {
   status(`Uploaded ${path}`, "ok");
 }
 
+/** Frames from other sites are outside `activeTab`; reading them needs host permission for every https site. */
+const EMBED_ORIGINS = ["https://*/*"];
+
+async function showEmbedState(): Promise<void> {
+  if (!(await chrome.permissions.contains({ origins: EMBED_ORIGINS }))) return;
+  $("embedHint").textContent = "Allowed: a save also reads text that a page shows in a frame from another site.";
+}
+
+async function allowEmbeds(): Promise<void> {
+  if (!(await chrome.permissions.request({ origins: EMBED_ORIGINS }))) throw new Error("permission to read embedded content was denied");
+  await showEmbedState();
+}
+
 const guard = (fn: () => Promise<void>) => () => fn().catch((e: Error) => status(e.message, "err"));
 
 let debounce: number | undefined;
@@ -137,6 +150,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     })();
   });
   $("test").addEventListener("click", guard(testUpload));
+  $("allowEmbeds").addEventListener("click", guard(allowEmbeds));
+  void showEmbedState();
 
   if (s.host && s.apiKey) void loadAgents();
   else if (s.agentId) showManualId();

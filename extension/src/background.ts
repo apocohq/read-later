@@ -13,6 +13,8 @@ interface PageSnapshot {
   selectedText: string;
   /** Absent when the tab is not an HTML document: Chrome's PDF viewer is an `<embed>` shell, so the agent fetches the URL itself. */
   html?: string;
+  /** Visible words in the frame, to pick the frame that holds the content. */
+  words: number;
 }
 
 /** Runs inside the page. Must be self-contained: no imports, no closures. */
@@ -25,6 +27,12 @@ function snapshotPage(): PageSnapshot {
     const root = document.documentElement.cloneNode(true) as HTMLElement;
     root.querySelectorAll('script:not([type="application/ld+json"]), style, svg, noscript, template').forEach((el) => el.remove());
     root.querySelectorAll("[style]").forEach((el) => el.removeAttribute("style"));
+    // An embedded frame's HTML is sent under the tab's URL, so its relative links would resolve
+    // against the wrong page; make them absolute while this frame's base is still known.
+    if (window !== window.top) {
+      root.querySelectorAll<HTMLAnchorElement>("a[href]").forEach((a) => a.setAttribute("href", a.href));
+      root.querySelectorAll<HTMLImageElement>("img[src]").forEach((img) => img.setAttribute("src", img.src));
+    }
     html = root.outerHTML;
   }
   return {
@@ -32,7 +40,33 @@ function snapshotPage(): PageSnapshot {
     title: document.title,
     selectedText: window.getSelection()?.toString() ?? "",
     html,
+    words: (document.body?.innerText ?? "").split(/\s+/).filter(Boolean).length,
   };
+}
+
+/** Ingest needs this many words; below it, an embedded frame with more text is the content. */
+const MIN_WORDS = 80;
+
+/**
+ * Snapshot every frame the extension may read and keep the one with the content. The tab's own page
+ * wins unless it is a thin shell around an embed (a claude.ai artifact, a CodePen): then the frame
+ * with the most words. Cross-origin frames need host permission (Options → Allow reading embedded
+ * content); without it Chrome returns only the frames `activeTab` covers.
+ */
+async function snapshotTab(tabId: number): Promise<PageSnapshot | undefined> {
+  const frames = await chrome.scripting
+    .executeScript({ target: { tabId, allFrames: true }, func: snapshotPage })
+    .then((results) => results.map((r) => ({ frameId: r.frameId, snap: r.result as PageSnapshot | undefined })))
+    .catch(() => []);
+  const main = frames.find((f) => f.frameId === 0)?.snap;
+  if (!main) return undefined;
+  const embed = frames
+    .filter((f) => f.frameId !== 0 && f.snap?.html)
+    .map((f) => f.snap!)
+    .sort((a, b) => b.words - a.words)[0];
+  const selectedText = main.selectedText || frames.map((f) => f.snap?.selectedText).find(Boolean) || "";
+  if (main.words >= MIN_WORDS || !embed || embed.words <= main.words) return { ...main, selectedText };
+  return { ...main, selectedText, html: embed.html, words: embed.words };
 }
 
 /** URLs with an upload in flight; a second click or shortcut while pending is ignored. */
@@ -93,10 +127,7 @@ async function capture(opts: { mustRead: boolean; note?: string }): Promise<void
   const stopBusy = startBusy(tab.id);
   try {
     // A tab that refuses injection (some viewers do) still gets captured by URL; the agent fetches it.
-    const page = await chrome.scripting
-      .executeScript({ target: { tabId: tab.id }, func: snapshotPage })
-      .then(([result]) => result?.result as PageSnapshot | undefined)
-      .catch(() => undefined);
+    const page = await snapshotTab(tab.id);
     const id = newId();
     const event: BrowserCapture = {
       id,

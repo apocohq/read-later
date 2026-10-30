@@ -11,7 +11,7 @@ export interface BrowserCapture {
   url: string;
   title?: string;
   selectedText?: string;
-  /** Full rendered page HTML. The agent extracts the article from it. Omitted for non-HTML tabs (PDF viewer); the agent fetches those. */
+  /** Full rendered page HTML. The agent extracts the article from it. When the page is a thin shell around an embedded frame (a claude.ai artifact), the frame's HTML, links made absolute. Omitted for non-HTML tabs (PDF viewer); the agent fetches those. */
   html?: string;
   note?: string;
   mustRead: boolean;
