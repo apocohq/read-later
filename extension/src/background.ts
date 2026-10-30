@@ -30,7 +30,7 @@ function snapshotPage(): PageSnapshot {
     // An embedded frame's HTML is sent under the tab's URL, so its relative links would resolve
     // against the wrong page; make them absolute while this frame's base is still known.
     if (window !== window.top) {
-      root.querySelectorAll<HTMLAnchorElement>("a[href]").forEach((a) => a.setAttribute("href", a.href));
+      root.querySelectorAll<HTMLAnchorElement>('a[href]:not([href^="#"])').forEach((a) => a.setAttribute("href", a.href));  // in-page anchors stay
       root.querySelectorAll<HTMLImageElement>("img[src]").forEach((img) => img.setAttribute("src", img.src));
     }
     html = root.outerHTML;
