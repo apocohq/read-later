@@ -12,6 +12,7 @@ only inside STATE_DIR. DAM checks that the caller owns the artifact; this server
     GET    /health                     {"app": "read-later", "version", "pid", "stateDir"}
     GET    /items                      {"items": {"<folder>": {"status", "highlights"}}} for every folder in items/,
                                        and "template": the hash of the template a render would use now
+    GET    /items/<folder>/content     {"item", "markdown"}: the article text the page shows (render.py's article_text)
     PUT    /items/<folder>/highlights  body: the page's highlights.json; replaces the file
     PATCH  /items/<folder>             body: {"status": "done" | "archived"}
     DELETE /items/<folder>             removes the folder from items/, done/ or archive/ for good
@@ -43,9 +44,12 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from render import article_text  # noqa: E402 - one rule for the article text, here and in render.py
+
 HOST, PORT = "127.0.0.1", 5555
 APP = "read-later"
-VERSION = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()[:12]  # a new server.py restarts the old one
+VERSION = hashlib.sha256(Path(__file__).read_bytes() + (Path(__file__).parent / "render.py").read_bytes()).hexdigest()[:12]  # a new server.py or render.py restarts the old one
 MAX_BODY = 1024 * 1024  # DAM's cap each way
 FOLDER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$")
 COLORS = {"yellow", "green", "blue", "pink", "orange"}
@@ -184,6 +188,7 @@ def clean_highlights(name: str, body: dict) -> dict:
 ROUTES = [
     ("GET", re.compile(r"^/health$"), lambda s, m, b: {"app": APP, "version": VERSION, "pid": os.getpid(), "stateDir": str(s.root)}),
     ("GET", re.compile(r"^/items$"), lambda s, m, b: s.items()),
+    ("GET", re.compile(r"^/items/([^/]+)/content$"), lambda s, m, b: {"item": m[1], "markdown": article_text(s.folder(m[1], POOLS))}),
     ("PUT", re.compile(r"^/items/([^/]+)/highlights$"), lambda s, m, b: s.put_highlights(m[1], b)),
     ("PATCH", re.compile(r"^/items/([^/]+)$"), lambda s, m, b: s.patch_item(m[1], b)),
     ("DELETE", re.compile(r"^/items/([^/]+)$"), lambda s, m, b: s.delete_item(m[1])),

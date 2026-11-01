@@ -5,9 +5,11 @@ Render the read-later library page: assets/template.html + data from the state d
     python3 scripts/render.py STATE_DIR
 
 Reads STATE_DIR/queue.json (order and buckets, from read-later-rank) and, for each
-entry, items/<folder>/item.json (analysis, metadata), content.md (the article) and
-highlights.json (the reader's highlights, when any), injects everything as one JSON blob
-into the template, and writes STATE_DIR/queue.html.
+entry, items/<folder>/item.json (analysis, metadata) and highlights.json (the reader's
+highlights, when any), injects everything as one JSON blob into the template, and writes
+STATE_DIR/queue.html. The article text (content.md) is not in the page: the page loads it
+from server.py (GET /items/<folder>/content, which calls article_text below) when the
+reader opens an article, and in the background after it loads.
 The template is the design; this script only supplies data. To restyle, edit the
 template (or drop a copy at STATE_DIR/template.html, which wins).
 
@@ -33,7 +35,7 @@ from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 BUCKETS = ("read_today", "read_next", "later")
-MAX_ARTICLE_WORDS = 12000  # keep the page well under the artifact size cap
+MAX_ARTICLE_WORDS = 12000  # keep one article well under the bridge's 1 MiB per response
 
 
 def strip_frontmatter(md: str) -> str:
@@ -44,11 +46,20 @@ def strip_frontmatter(md: str) -> str:
     return md
 
 
+def article_text(folder: Path) -> str:
+    """The article as the reader shows it: content.md without front matter, cut at MAX_ARTICLE_WORDS. "" when there is none."""
+    path = folder / "content.md"
+    body = strip_frontmatter(path.read_text()) if path.exists() else ""
+    words = body.split()
+    if len(words) > MAX_ARTICLE_WORDS:
+        body = " ".join(words[:MAX_ARTICLE_WORDS]) + "\n\n*Truncated for the library page; open the original for the rest.*"
+    return body
+
+
 def entry(root: Path, e: dict, bucket: str) -> dict:
     folder = root / e["item"]
     item = json.loads((folder / "item.json").read_text()) if (folder / "item.json").exists() else {}
     a = item.get("analysis") or {}
-    body = strip_frontmatter((folder / "content.md").read_text()) if (folder / "content.md").exists() else ""
     highlights = []
     if (folder / "highlights.json").exists():
         try:
@@ -60,9 +71,6 @@ def entry(root: Path, e: dict, bucket: str) -> dict:
                 print(f"warning: {folder.name}/highlights.json has no highlights list; ignored", file=sys.stderr)
         except (OSError, ValueError) as err:
             print(f"warning: {folder.name}/highlights.json unreadable: {err}", file=sys.stderr)
-    words = body.split()
-    if len(words) > MAX_ARTICLE_WORDS:
-        body = " ".join(words[:MAX_ARTICLE_WORDS]) + "\n\n*Truncated for the library page; open the original for the rest.*"
     return {
         "id": Path(e["item"]).name,
         "bucket": bucket,
@@ -88,7 +96,7 @@ def entry(root: Path, e: dict, bucket: str) -> dict:
         "relevance": e.get("relevance"),
         "priority": e.get("priority"),
         "notes": e.get("notes", []),
-        "markdown": body,
+        "text": (folder / "content.md").exists(),  # the page loads it from the server
         "highlights": highlights,
         "via": via(item),
     }
