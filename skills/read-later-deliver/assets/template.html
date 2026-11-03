@@ -443,7 +443,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
   // live: highlights save as you go, Done, Archive and Delete act at once. Otherwise each one goes to the agent as a chat paste.
   const LIVE = (() => {
     const bridge = window.platform && typeof window.platform.request === 'function' ? window.platform : null;
-    let mode = bridge ? 'checking' : 'off', why = '', stale = false, onMode = () => {}, onSaved = () => {};
+    let mode = bridge ? 'checking' : 'off', why = '', stale = false, onMode = () => {}, onSaved = () => {}, onText = () => {};
     const timers = {}, inflight = {};
     const REASONS = {'app-not-listening': 'the server is not running', 'timeout': 'no answer', 'not-allowed': 'this view cannot call the agent', 'agent-unreachable': 'the agent is not reachable', 'unsupported-runtime': 'the agent is too old for this', 'too-many-requests': 'too many requests at once'};
     const reasonText = r => REASONS[r] || r || 'unknown error';
@@ -477,6 +477,23 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
         for (const it of items) if (!it.gone && HL.current(it).some(h => HL.isLocal(it, h.id))) saveSoon(it);  // edits kept in this browser before
       } catch (err){ mode = 'down'; why = reasonText(err && (err.reason || err.message)); }
       onMode();
+      if (mode === 'live') prefetch();
+    }
+    // The article text is not in the page (it would be most of its size): one request per article, cached.
+    const texts = {};
+    function text(it){
+      return texts[it.id] ??= call('GET', path(it) + '/content').then(doc => (it.markdown = (doc && doc.markdown) || ''), err => { delete texts[it.id]; throw err; });
+    }
+    // After the page shows: every article in queue order, three at a time, so opening one is instant and search covers the text.
+    async function prefetch(){
+      const todo = items.filter(it => it.text && it.markdown == null && !it.gone);
+      const worker = async () => {
+        while (todo.length && mode === 'live'){
+          const it = todo.shift();
+          try { await text(it); onText(it); } catch (err) { if (!err.status){ fail(err); return; } }
+        }
+      };
+      await Promise.all([worker(), worker(), worker()]);
     }
     // Half a second after the last edit, one save per item at a time; what the server took becomes the page's synced set.
     function saveSoon(it){ if (mode !== 'live') return; clearTimeout(timers[it.id]); timers[it.id] = setTimeout(() => save(it).catch(() => {}), 500); }
@@ -501,8 +518,8 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
     // the nightly schedule's task, word for word, so a click does exactly what 18:00 does
     const askToRefresh = () => ask('Read later: refresh requested from the library page. Read-later refresh. State dir ~/work/read-later. Use the installed skills in this order, and only these: read-later-slack (run its script; skip the skill if it reports no Slack connection), read-later-ingest (with UV_CACHE_DIR=~/work/.cache/uv), read-later-analyze (pass only the model connection), read-later-rank (reweigh from context.md first), read-later-deliver. Report each script output briefly and the artifact link. Do not open articles.');
     const askToRepublish = () => ask('Read later: the library page is out of date. Run the read-later-deliver skill to render and publish it again, and give me the link.');
-    return { mode: () => mode, why: () => why, stale: () => stale, connect, saveSoon, save, act, fail, pending, askToStart, askToRepublish, askToRefresh, bridged: !!bridge,
-      set onMode(f){ onMode = f; }, set onSaved(f){ onSaved = f; } };
+    return { mode: () => mode, why: () => why, stale: () => stale, connect, saveSoon, save, act, fail, pending, text, askToStart, askToRepublish, askToRefresh, bridged: !!bridge,
+      set onMode(f){ onMode = f; }, set onSaved(f){ onSaved = f; }, set onText(f){ onText = f; } };
   })();
   hlChanged = it => LIVE.saveSoon(it);
 
@@ -559,9 +576,25 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
   function mountHighlights(it){
     const article = document.getElementById('article'), panel = document.getElementById('hls'), tools = document.getElementById('tools');
     let orphans = [];
+    const waiting = () => it.text && it.markdown == null;
     function renderArticle(){
-      article.innerHTML = it.markdown ? md(it.markdown) : '<p class="note">Full text not included.</p>';
-      orphans = HL.apply(article, it);
+      const m = LIVE.mode();
+      if (!waiting()){
+        article.innerHTML = it.markdown ? md(it.markdown) : '<p class="note">Full text not included.</p>';
+        orphans = HL.apply(article, it);
+      } else {
+        orphans = [];  // nothing to anchor to yet; not "not found"
+        const original = `<a href="${esc(it.url)}" target="_blank" rel="noopener">Read the original ↗</a>`;
+        if (m === 'checking') article.innerHTML = '<p class="note">Loading the article…</p>';
+        else if (m === 'live'){
+          article.innerHTML = '<p class="note">Loading the article…</p>';
+          LIVE.text(it).then(() => refreshOpen && refreshOpen.it === it && refreshOpen.text(), err => {
+            if (!(refreshOpen && refreshOpen.it === it)) return;
+            const why = LIVE.fail(err);
+            if (LIVE.mode() === 'live') article.innerHTML = `<p class="note">Could not load the text (${esc(why)}). ${original}</p>`;
+          });
+        } else article.innerHTML = `<p class="note">The text loads from your agent's server, which ${m === 'off' ? 'this view cannot reach. It works in the preview beside the chat with your agent' : `does not answer (${esc(LIVE.why())})`}. ${original}</p>`;
+      }
       article.classList.toggle('hl-on', hlOn);
     }
     function renderTools(){
@@ -638,7 +671,7 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
       pop.querySelector('[data-a="remove"]').addEventListener('click', () => removeOne(h.id));
       pop.querySelectorAll('.sw').forEach(b => b.addEventListener('click', () => { const done = replaceMark(h.id); HL.setColorOf(it, h.id, b.dataset.c); closePop(); done(); }));
     });
-    refreshOpen = { it, run(){ renderTools(); renderPanel(); } };
+    refreshOpen = { it, run(){ if (waiting()) renderArticle(); renderTools(); renderPanel(); }, text(){ renderArticle(); renderPanel(); } };
     renderArticle(); renderTools(); renderPanel();
   }
   let refreshOpen = null;  // the open reader's tools and panel, redrawn when the server's state changes
@@ -680,6 +713,10 @@ mark.hl.flash{outline:2px solid var(--accent);outline-offset:1px}
     }
     subline(); render(filter, document.getElementById('q').value);
     if (refreshOpen){ if (refreshOpen.it.gone) close(); else refreshOpen.run(); }
+  };
+  LIVE.onText = it => {
+    if (document.getElementById('q').value) render(filter, document.getElementById('q').value);  // a search now also finds it by its text
+    if (refreshOpen && refreshOpen.it === it) refreshOpen.text();
   };
   LIVE.onSaved = (it, err) => {
     if (err) toast(`Highlights not saved: ${err}`);
